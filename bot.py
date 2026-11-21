@@ -105,6 +105,10 @@ class Bot:
         self.scout_goal = None
         self.scout_until = -100.0
         self.explored = set()
+        self.sound_contacts = []
+        self.last_sound_yaw = None
+        self.last_sound_time = -100.0
+        self.last_sound_kind = None
 
     def update(self, obs):
         t = obs["t"]
@@ -169,6 +173,29 @@ class Bot:
             if until < t:
                 del self.bad_pickups[ident]
         self.explored.add((round(own_pos[0] / 25), round(own_pos[1] / 25)))
+        self.sound_contacts = [q for q in self.sound_contacts if t - q["seen"] < 4.0]
+        for heard in obs.get("sounds", []):
+            kind = heard.get("kind", "")
+            if kind not in ("gun", "mortar", "laser", "laser_charge",
+                            "lightning", "step", "boost", "jet"):
+                continue
+            age = heard.get("age", 0.0)
+            if age > 1.2:
+                continue
+            bearing = heard.get("bearing", 0.0)
+            band = heard.get("dist", "mid")
+            radius = {"near": 43, "mid": 112, "far": 212}.get(band, 115)
+            px = own_pos[0] + radius * math.cos(bearing)
+            py = own_pos[1] + radius * math.sin(bearing)
+            self.sound_contacts.append({"pos": (px, py),
+                                        "seen": t - age, "bearing": bearing,
+                                        "kind": kind, "band": band})
+            if (t - age >= self.last_sound_time and
+                    kind in ("gun", "mortar", "laser", "laser_charge", "lightning")):
+                self.last_sound_yaw = bearing
+                self.last_sound_time = t - age
+                self.last_sound_kind = kind
+        self.sound_contacts = self.sound_contacts[-18:]
         self.last_time = t
 
     def threats(self, pos, t, radius=220):
@@ -334,6 +361,23 @@ class Bot:
             return (z["next_center"][0], z["next_center"][1]), "zone", True
         taking_fire = t - self.last_hit < 7.5
         outnumbered = close >= 2 and nearest < 110
+        unseen_incoming = (not threats and
+                           ((taking_fire and self.last_bearing is not None) or
+                            (t - self.last_sound_time < 1.7 and
+                             self.last_sound_kind == "laser_charge")))
+        if unseen_incoming and hp < 0.92:
+            bearing = (self.last_bearing if t - self.last_hit < 6
+                       else self.last_sound_yaw)
+            if bearing is not None:
+                rx, ry = math.cos(bearing), math.sin(bearing)
+                faux = {"pos": [p[0] + rx * 58, p[1] + ry * 58, p[2]],
+                        "aim": [wrap(bearing + math.pi), 0], "charging": False}
+                cover = self.find_cover(obs, [(faux, 58.0, 0.0)])
+                if cover is not None:
+                    return cover, "cover", False
+                retreat = (p[0] - 40 * rx, p[1] - 40 * ry)
+                if self.safety(obs, retreat):
+                    return retreat, "flee", False
         disadvantage = (hp < TUNE["cover_hp"] or
                         (taking_fire and hp < TUNE["hurt_cover_hp"]) or
                         (hp < 0.78 and outnumbered))
@@ -355,6 +399,10 @@ class Bot:
         have_secondary = weapons[1] is not None
         local_threat = nearest < TUNE["avoid_range"] and (
             not self.ffa or nearest < 160)
+        if (t - self.last_sound_time < 2.2 and
+                any(q["band"] == "near" and t - q["seen"] < 2
+                    for q in self.sound_contacts)):
+            local_threat = True
         choices = []
         for ident, (pck, seen) in self.loot.items():
             if ident in self.bad_pickups:
@@ -486,6 +534,23 @@ class Bot:
                     ux, uy = unit(x - tr["pos"][0], y - tr["pos"][1])
                     ax += ux * weight
                     ay += uy * weight
+            for audible in self.sound_contacts[-10:]:
+                age = t - audible["seen"]
+                if age > 3.5:
+                    continue
+                q = audible["pos"]
+                estimated = distance((x, y), q)
+                if estimated > 205:
+                    continue
+                ux, uy = unit(x - q[0], y - q[1])
+                amount = (205 - estimated) / 205 * (1 - age / 4)
+                if self.ffa:
+                    amount *= 0.55
+                ax += ux * amount * 0.9
+                ay += uy * amount * 0.9
+            if t - self.last_hit < 6 and self.last_bearing is not None:
+                ax -= math.cos(self.last_bearing) * 0.9
+                ay -= math.sin(self.last_bearing) * 0.9
             ddx, ddy = unit(dx, dy)
             dx, dy = ddx + 1.3 * ax, ddy + 1.3 * ay
         dx, dy = unit(dx, dy)
@@ -621,6 +686,8 @@ class Bot:
         if active is None:
             if self.last_bearing is not None and obs["t"] - self.last_hit < 8.0:
                 action["aim"] = [self.last_bearing, 0.0]
+            elif self.last_sound_yaw is not None and obs["t"] - self.last_sound_time < 4:
+                action["aim"] = [self.last_sound_yaw, 0.0]
             else:
                 action["aim"] = [wrap(me["aim"][0] + 0.32), 0.0]
             return
@@ -735,7 +802,10 @@ class Bot:
                     break
         move, boost, jump = self.steer(obs, goal, mode, urgent, threats)
         a["move"] = self.dodge(obs, move)
-        a["boost"] = boost
+        a["boost"] = boost or (
+            me["energy"] > 43 and me["grounded"] and
+            t - self.last_sound_time < 1.1 and
+            self.last_sound_kind == "laser_charge")
         a["jump"] = jump
         self.aim_and_fire(obs, target, mode, threats, a)
         # If hiding to regenerate, avoid dealing damage.
