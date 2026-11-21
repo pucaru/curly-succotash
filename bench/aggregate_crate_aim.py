@@ -17,8 +17,14 @@ FFA_START = 1034211
 COUNT = 24
 
 
+def artifact_value(value):
+    # GitHub's YAML scalar 2.0 becomes the string "2" in matrix artifact names.
+    return str(int(value)) if float(value).is_integer() else str(value)
+
+
 def logfile(value, opponent, mode):
-    return ROOT / f"crate-aim-height-{value}-{opponent}" / f"{mode}-crate-aim-height.txt"
+    key = artifact_value(value)
+    return ROOT / f"crate-aim-height-{key}-{opponent}" / f"{mode}-crate-aim-height.txt"
 
 
 def read_scores(value, opponent, mode):
@@ -63,7 +69,7 @@ def summarize():
         "Proxy simulator only; scores are not official. Control 4.5 preserves production behavior.",
         "Three crate impact heights, three populations, two modes, 24 fresh matched seeds per cell = 432 matches.",
         "",
-        "| Opponents | 1.4 squad | 1.4 FFA | 4.5 squad | 4.5 FFA | 2.0 squad | 2.0 FFA |",
+        "| Opponents | 4.5 squad | 4.5 FFA | 1.4 squad | 1.4 FFA | 2.0 squad | 2.0 FFA |",
         "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for opponent in OPPONENTS:

@@ -1,0 +1,35 @@
+name: Repair crate-height aggregate without replaying games
+on:
+  push:
+    branches:
+      - experiment/crate-aim-height-20261121-2222
+    paths:
+      - .github/workflows/crate-aim-aggregate-recovery.yml
+  workflow_dispatch:
+permissions:
+  actions: read
+  contents: read
+jobs:
+  aggregate-existing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch all nine immutable cell artifacts from completed screening
+        uses: actions/download-artifact@v4
+        with:
+          run-id: 44912264906
+          github-token: ${{ github.token }}
+          pattern: crate-aim-height-*
+          path: bench-artifacts
+      - name: Validate 432 saved placements without re-running simulations
+        run: |
+          python3 -m py_compile bench/aggregate_crate_aim.py
+          python3 bench/aggregate_crate_aim.py
+      - name: Publish repaired audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crate-aim-height-recovered-summary
+          path: crate-aim-height-results.md
+          if-no-files-found: ignore

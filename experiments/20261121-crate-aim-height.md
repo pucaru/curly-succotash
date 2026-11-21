@@ -14,3 +14,9 @@ Pin MIT-licensed independent simulator `VivekRnx/bob-the-builder-2026@b76c216d8a
 Require no mean deterioration in any of six populations/modes, no increase in early deaths or outside-zone seconds. Candidates require an independent held-out ≥64 FFA and 32 squad fresh-seed games per opponent profile, collision check against true engine when possible, final-circle review, native/Docker conformance before any promotion. Crate effects can be negative if noisy farming alerts enemy squad.
 
 No official tournament submission; no competitor source code or public competitor research stored in this repository. Preserve submitted history.
+
+## Aggregation recovery — reporting failure, not a simulation failure
+
+[Original 432-game screening run](https://github.com/pucaru/curly-succotash/actions/runs/44912264906): all **9/9 simulation cells passed**, as did [native/unit/Docker conformance](https://github.com/pucaru/curly-succotash/actions/runs/44912264689). The aggregate job failed before displaying the summary because GitHub Actions rendered YAML matrix value `2.0` as artifact suffix `2`, while our parser expected `2.0`. The aggregator also printed its first two numeric column labels in the wrong order.
+
+The parser now canonicalizes integer-valued YAML floats and labels columns in the true `VALUES=(4.5,1.4,2.0)` order. A recovery workflow downloads the **original immutable nine artifacts by run ID** and recomputes the audit, without simulating a single extra game. No results have been promoted or discarded to hide the reporting failure.
