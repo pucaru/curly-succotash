@@ -574,6 +574,29 @@ class Bot:
             if self.stuck >= 17:
                 self.unstuck_until = t + 1.4
                 self.unstuck_yaw = math.atan2(dy, dx) + self.rng.choice((-1.0, 1.0))
+                if TUNE.get("guided_unstuck", False) and self.map is not None:
+                    # Escape repeated wall contact into an actually open short
+                    # corridor, rather than choosing an untested random angle.
+                    prefer = math.atan2(goal[1] - y, goal[0] - x)
+                    zone = obs["zone"]
+                    center = zone["next_center"] if urgent else zone["center"]
+                    old_zone_dist = distance((x, y), center)
+                    best_score, best_yaw = float("-inf"), None
+                    for i in range(24):
+                        a = i * TAU / 24
+                        clearance = self.map.walk_score(x, y, a, 22)
+                        if clearance < 7:
+                            continue
+                        tx = x + math.cos(a) * min(clearance, 15)
+                        ty = y + math.sin(a) * min(clearance, 15)
+                        zone_drift = distance((tx, ty), center) - old_zone_dist
+                        score = 1.7 * clearance + 7 * math.cos(wrap(a - prefer))
+                        if zone_drift > 4:
+                            score -= (12 if urgent else 3) * zone_drift / 15
+                        if score > best_score:
+                            best_score, best_yaw = score, a
+                    if best_yaw is not None:
+                        self.unstuck_yaw = best_yaw
                 self.stuck = 0
         self.prev_pos = p[:]
         boost = (urgent or mode in ("cover", "flee", "finish") or
