@@ -2,12 +2,12 @@ name: Independent LOS-verified cover screen
 on:
   push:
     branches:
-      - experiment/cover-los-gate-20261122-0434
+      - experiment/cover-los-gate-20261122-0530
     paths:
       - .github/workflows/cover-los-gate.yml
   workflow_dispatch:
 concurrency:
-  group: cover-los-gate-20261122-0434
+  group: cover-los-gate-20261122-0530
   cancel-in-progress: true
 jobs:
   compare:
