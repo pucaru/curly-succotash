@@ -3,7 +3,7 @@
 **PRE-REGISTERED, not yet evaluated.** Immutable production main `60b5438af4d45af989f63bffcbe0b03250a23ae4`. No official practice run or tournament submission; local scores are approximate.
 
 ## Causal hypothesis
-Official `mechfight/1` §7 says health regeneration starts after **5 s without dealing or receiving damage**, at **45 HP/s**, and stops in the zone. The original bot opportunistically shoots crates and NPC drones while travelling/scouting if no opponent is nearby. This *dealing damage* can repeatedly reset the regeneration clock for a mech that is already injured, even when passive restoration would provide hundreds of HP before the next hunter duel.
+Official `mechfight/1` §7 says health regeneration starts after **5 s without dealing or receiving damage**, at **45 HP/s**, and does not occur while outside the safe zone. The original bot opportunistically shoots crates and NPC drones while travelling/scouting if no opponent is nearby. This *dealing damage* can repeatedly reset the regeneration clock for a mech that is already injured, even when passive restoration would provide hundreds of HP before the next hunter duel.
 
 Unlike the rejected `quiet-farm` experiment (silence before t=60 regardless of health), this is exclusively **injury and healing-window dependent**, at any match time. `MECH_TUNE={"injured_farm_silence":0}` is unchanged baseline; `1` bypasses noncombat crate/NPC targeting when own HP <82% and no currently selected mech target, while preserving enemy targeting, gun/laser logic in combat, supply/cube collection, movement, threats, loot and health-independent farming. The economic cost is lost crate cubes/upgrades; this must be measured rather than assumed away. No other code changes.
 
