@@ -27,6 +27,7 @@ TUNE = {
     "avoid_range": 145.0,
     "laser_value": 300.0,
     "laser_search_radius": 270.0,
+    "outnumbered_jet": 1,  # 0 exact control, 1 bounded aerial escape when surrounded
 }
 try:
     TUNE.update(json.loads(os.environ.get("MECH_TUNE", "{}") or "{}"))
@@ -109,6 +110,8 @@ class Bot:
         self.last_sound_yaw = None
         self.last_sound_time = -100.0
         self.last_sound_kind = None
+        self.escape_until = -100.0
+        self.last_escape = -100.0
 
     def update(self, obs):
         t = obs["t"]
@@ -814,6 +817,32 @@ class Bot:
             if target is None or (distance(p, target["pos"]) > 65 and
                                   me["hp"] < me["max_hp"] * 0.72):
                 a["fire"] = [False, False]
+        if TUNE["outnumbered_jet"]:
+            # Coordinated hunters are faster together on open ground. A
+            # short jump-plus-jet supplies a vertical escape dimension,
+            # something the original lateral flee/cover movement never uses.
+            nearby = [(tr, d) for tr, d, age in threats
+                      if age < 2.0 and d < 115]
+            if (not self.ffa and len(nearby) >= 3 and
+                    t - self.last_hit < 1.2 and
+                    me["hp"] < me["max_hp"] * 0.86 and
+                    me["energy"] > 75 and t - self.last_escape > 18):
+                self.escape_until = t + 2.2
+                self.last_escape = t
+            if t < self.escape_until and me["energy"] > 26:
+                a["jump"] = a["jump"] or me["grounded"]
+                a["boost"] = True
+                # Keep horizontal retreat while climbing, but do not
+                # sacrifice air lift to chasing a target or a loot drop.
+                rx = ry = 0.0
+                for tr, d in nearby:
+                    ux, uy = unit(p[0] - tr["pos"][0],
+                                  p[1] - tr["pos"][1])
+                    rx += ux * (115 - d) / 115
+                    ry += uy * (115 - d) / 115
+                if rx or ry:
+                    a["move"] = list(unit(a["move"][0] * .35 + rx * 2,
+                                           a["move"][1] * .35 + ry * 2))
         if obs["tick"] % 12 == 0:
             mf.draw.label("%s | HP %.0f | cubes %d | %s" %
                           (mode, me["hp"], me["cubes"],
