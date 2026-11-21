@@ -1,0 +1,93 @@
+name: Independent aimed-hostile preemptive cover experiment
+on:
+  push:
+    branches:
+      - experiment/preempt-cover-20261121-2245
+    paths:
+      - .github/workflows/preempt-cover.yml
+  workflow_dispatch:
+concurrency:
+  group: preempt-cover-20261121-2245
+  cancel-in-progress: true
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 36
+    strategy:
+      fail-fast: false
+      matrix:
+        preempt_range: [0, 95, 155]
+        opponent: [v1, v2, mixed]
+    env:
+      VALUE: ${{ matrix.preempt_range }}
+      OPP_KIND: ${{ matrix.opponent }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure fixed cover radius and independent opponent group
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "MECH_TUNE={\"preempt_cover_until\":${VALUE}}" >> "$GITHUB_ENV"
+          case "$OPP_KIND" in
+            v1) echo 'OPP=tools.baseline.brain_v1' >> "$GITHUB_ENV" ;;
+            v2) echo 'OPP=tools.baseline.brain_v2' >> "$GITHUB_ENV" ;;
+            mixed) echo 'OPP=tools.baseline.brain_v1,tools.baseline.brain_v1,tools.baseline.brain_v2,tools.baseline.brain_v2' >> "$GITHUB_ENV" ;;
+            *) exit 2 ;;
+          esac
+      - name: Syntax and strategy conformance
+        run: |
+          python3 -m py_compile bot.py arena.py mechfight.py bench/one_hero_ffa.py bench/aggregate_preempt_cover.py
+          python3 -m unittest discover -s tests -v
+      - name: Clone reproducible independently implemented MIT simulation
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/VivekRnx/bob-the-builder-2026.git "$RUNNER_TEMP/sim"
+          cd "$RUNNER_TEMP/sim"
+          git checkout --detach b76c216d8a7829e14409a42058eea93e46e9ccdb
+          cp "$GITHUB_WORKSPACE/bot.py" "$GITHUB_WORKSPACE/arena.py" .
+          cp "$GITHUB_WORKSPACE/bench/one_hero_ffa.py" tools/one_hero_ffa.py
+          printf 'from bot import Bot as Brain\n' > survivor_adapter.py
+      - name: Cooperative squad - 12 new paired seeds
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/sim"
+          python3 tools/sim.py -n 12 -j 4 --seed 1510211 --mode squad \
+            --hero survivor_adapter --opp "$OPP" --diag 2>&1 | tee "$GITHUB_WORKSPACE/squad-preempt-cover.txt"
+      - name: One-entrant FFA - 12 new paired seeds
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/sim"
+          python3 tools/one_hero_ffa.py -n 12 -j 4 --seed 1520211 \
+            --opp "$OPP" 2>&1 | tee "$GITHUB_WORKSPACE/ffa-preempt-cover.txt"
+      - name: Preserve per-seed output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: preempt-cover-${{ matrix.preempt_range }}-${{ matrix.opponent }}
+          path: |
+            squad-preempt-cover.txt
+            ffa-preempt-cover.txt
+          if-no-files-found: ignore
+  aggregate:
+    needs: compare
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download all nine comparison artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: preempt-cover-*
+          path: bench-artifacts
+      - name: Check all 216 placements and publish paired zone-exposure audit
+        run: python3 bench/aggregate_preempt_cover.py
+      - name: Upload audit summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: preempt-cover-summary
+          path: preempt-cover-results.md
+          if-no-files-found: ignore
