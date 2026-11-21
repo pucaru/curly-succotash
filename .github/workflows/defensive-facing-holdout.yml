@@ -1,0 +1,71 @@
+name: Defensive facing independent robustness holdout
+on:
+  push:
+    branches:
+      - experiment/defensive-facing-20261121-1750
+    paths:
+      - bench/one_hero_ffa.py
+      - .github/workflows/defensive-facing-holdout.yml
+  workflow_dispatch:
+jobs:
+  holdout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 26
+    strategy:
+      fail-fast: false
+      matrix:
+        facing: [0.0, 85.0]
+        opponents: [v1, v2, mixed]
+    env:
+      FACING_RANGE: ${{ matrix.facing }}
+      OPP_KIND: ${{ matrix.opponents }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set exact experiment configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "MECH_TUNE={\"defensive_facing_range\":${FACING_RANGE}}" >> "$GITHUB_ENV"
+          case "$OPP_KIND" in
+            v1) echo "OPP=tools.baseline.brain_v1" >> "$GITHUB_ENV" ;;
+            v2) echo "OPP=tools.baseline.brain_v2" >> "$GITHUB_ENV" ;;
+            mixed) echo "OPP=tools.baseline.brain_v1,tools.baseline.brain_v1,tools.baseline.brain_v2,tools.baseline.brain_v2" >> "$GITHUB_ENV" ;;
+            *) exit 2 ;;
+          esac
+      - name: Regression tests
+        run: |
+          python3 -m py_compile bot.py arena.py mechfight.py bench/one_hero_ffa.py
+          python3 -m unittest discover -s tests -v
+      - name: Acquire independent MIT licensed simulator at fixed revision
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/VivekRnx/bob-the-builder-2026.git "$RUNNER_TEMP/sim"
+          cd "$RUNNER_TEMP/sim"
+          git checkout --detach b76c216d8a7829e14409a42058eea93e46e9ccdb
+          cp "$GITHUB_WORKSPACE/bot.py" "$GITHUB_WORKSPACE/arena.py" .
+          cp "$GITHUB_WORKSPACE/bench/one_hero_ffa.py" tools/one_hero_ffa.py
+          printf 'from bot import Bot as Brain\n' > survivor_adapter.py
+      - name: Practice squad holdout - 24 novel paired seeds
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/sim"
+          python3 tools/sim.py -n 24 -j 4 --seed 731221 --mode squad \
+            --hero survivor_adapter --opp "$OPP" --diag 2>&1 | tee "$GITHUB_WORKSPACE/squad-holdout.txt"
+      - name: Single-entry true FFA holdout - 32 novel paired seeds
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/sim"
+          python3 tools/one_hero_ffa.py -n 32 -j 4 --seed 941221 \
+            --opp "$OPP" 2>&1 | tee "$GITHUB_WORKSPACE/ffa-single-holdout.txt"
+      - name: Preserve placement and per-seed diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: facing-holdout-${{ matrix.facing }}-${{ matrix.opponents }}
+          path: |
+            squad-holdout.txt
+            ffa-single-holdout.txt
+          if-no-files-found: ignore
