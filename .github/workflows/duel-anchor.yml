@@ -34,7 +34,7 @@ jobs:
             mixed) echo 'OPP=tools.baseline.brain_v1,tools.baseline.brain_v1,tools.baseline.brain_v2,tools.baseline.brain_v2' >> "$GITHUB_ENV" ;;
             *) exit 2 ;;
           esac
-      - name: Syntax and strategy conformance
+      - name: Validate corrected duel-anchor tests and candidate/control configuration
         run: |
           python3 -m py_compile bot.py arena.py mechfight.py bench/one_hero_ffa.py bench/aggregate_duel_anchor.py
           python3 -c 'import os; from bot import TUNE; assert TUNE["duel_target_tracking"] == int(os.environ["VALUE"])'
