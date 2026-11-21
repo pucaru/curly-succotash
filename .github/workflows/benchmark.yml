@@ -1,4 +1,4 @@
-name: Squad combat and farming strategy comparison
+name: Placement candidates on independent opponents
 on:
   push:
     paths:
@@ -7,26 +7,33 @@ on:
 jobs:
   simulate:
     runs-on: ubuntu-latest
-    timeout-minutes: 18
+    timeout-minutes: 22
     strategy:
       fail-fast: false
       max-parallel: 6
       matrix:
         include:
-          - label: baseline
+          - label: baseline-v1
+            opponent: tools.baseline.brain_v1
             tune: '{}'
-          - label: squad-attack
-            tune: '{"squad_aggressive":true}'
-          - label: early-farm
-            tune: '{"farm_hunt":true}'
-          - label: attack-and-farm
-            tune: '{"squad_aggressive":true,"farm_hunt":true}'
-          - label: attack-farm-boost
-            tune: '{"squad_aggressive":true,"farm_hunt":true,"combat_boost":true}'
-          - label: attack-farm-focus
+          - label: boosted-focus-v1
+            opponent: tools.baseline.brain_v1
+            tune: '{"combat_boost":true,"focus":260,"attacker":310,"finish":180,"duel_hp":0.25,"duel_range":200,"cover_hp":0.24,"hurt_cover_hp":0.4}'
+          - label: aggressive-farm-v1
+            opponent: tools.baseline.brain_v1
+            tune: '{"squad_aggressive":true,"farm_hunt":true,"focus":250,"attacker":280,"finish":180}'
+          - label: baseline-v2
+            opponent: tools.baseline.brain_v2
+            tune: '{}'
+          - label: boosted-focus-v2
+            opponent: tools.baseline.brain_v2
+            tune: '{"combat_boost":true,"focus":260,"attacker":310,"finish":180,"duel_hp":0.25,"duel_range":200,"cover_hp":0.24,"hurt_cover_hp":0.4}'
+          - label: aggressive-farm-v2
+            opponent: tools.baseline.brain_v2
             tune: '{"squad_aggressive":true,"farm_hunt":true,"focus":250,"attacker":280,"finish":180}'
     env:
       MECH_TUNE: ${{ matrix.tune }}
+      OPP: ${{ matrix.opponent }}
     steps:
       - uses: actions/checkout@v4
       - name: Retrieve simulator
@@ -35,16 +42,16 @@ jobs:
           git clone --depth=1 https://github.com/VivekRnx/bob-the-builder-2026.git "$RUNNER_TEMP/sim"
           cp bot.py arena.py "$RUNNER_TEMP/sim/"
           printf 'from bot import Bot as Brain\n' > "$RUNNER_TEMP/sim/survivor_adapter.py"
-      - name: Squad / 12 held-out seeds
+      - name: Squad / 16 fresh seeds
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP/sim"
-          python3 tools/sim.py -n 12 -j 4 --seed 44131 --mode squad --hero survivor_adapter --opp tools.baseline.brain_v1 --diag 2>&1 | tee "$GITHUB_WORKSPACE/squad-results.txt"
-      - name: FFA / 4 held-out seeds
+          python3 tools/sim.py -n 16 -j 4 --seed 88201 --mode squad --hero survivor_adapter --opp "$OPP" --diag 2>&1 | tee "$GITHUB_WORKSPACE/squad-results.txt"
+      - name: FFA / 6 fresh seeds
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP/sim"
-          python3 tools/sim.py -n 4 -j 4 --seed 21221 --mode ffa --hero survivor_adapter --opp tools.baseline.brain_v1 --diag 2>&1 | tee "$GITHUB_WORKSPACE/ffa-results.txt"
+          python3 tools/sim.py -n 6 -j 3 --seed 41177 --mode ffa --hero survivor_adapter --opp "$OPP" --diag 2>&1 | tee "$GITHUB_WORKSPACE/ffa-results.txt"
       - name: Preserve scores
         if: always()
         uses: actions/upload-artifact@v4
