@@ -1,0 +1,61 @@
+name: One-hero mixed-opponent FFA holdout
+on:
+  push:
+    branches:
+      - experiment/mixed-ffa-holdout-20261121-1745
+    paths:
+      - .github/workflows/mixed-ffa.yml
+      - experiments/mixed_ffa.py
+  workflow_dispatch:
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 24
+    strategy:
+      fail-fast: false
+      matrix:
+        policy: [baseline, short-range, avoid-duel]
+        mix: [balanced, strong]
+    env:
+      POLICY: ${{ matrix.policy }}
+      MIX: ${{ matrix.mix }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set isolated tuning policy
+        shell: bash
+        run: |
+          case "$POLICY" in
+            baseline) echo 'MECH_TUNE={}' >> "$GITHUB_ENV" ;;
+            short-range) echo 'MECH_TUNE={"duel_range":60}' >> "$GITHUB_ENV" ;;
+            avoid-duel) echo 'MECH_TUNE={"duel_hp":1.01}' >> "$GITHUB_ENV" ;;
+            *) exit 2 ;;
+          esac
+      - name: Validate repository and independent evaluator syntax
+        run: |
+          python3 -m py_compile bot.py arena.py mechfight.py experiments/mixed_ffa.py
+          python3 -m unittest discover -s tests -v
+      - name: Retrieve pinned MIT-licensed approximation
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/VivekRnx/bob-the-builder-2026.git "$RUNNER_TEMP/sim"
+          cd "$RUNNER_TEMP/sim"
+          git checkout --detach b76c216d8a7829e14409a42058eea93e46e9ccdb
+          cp "$GITHUB_WORKSPACE/bot.py" "$GITHUB_WORKSPACE/arena.py" .
+          cp "$GITHUB_WORKSPACE/experiments/mixed_ffa.py" .
+          printf 'from bot import Bot as Brain\n' > survivor_adapter.py
+      - name: Sixteen paired fresh FFA seeds with one candidate and fifteen varied opponents
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/sim"
+          if [ "$MIX" = balanced ]; then SEED=951221; else SEED=971221; fi
+          python3 mixed_ffa.py -n 16 -j 4 --seed "$SEED" --mix "$MIX" \
+            2>&1 | tee "$GITHUB_WORKSPACE/mixed-results.txt"
+      - name: Preserve scores and placement tails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-hero-ffa-${{ matrix.policy }}-${{ matrix.mix }}
+          path: mixed-results.txt
+          if-no-files-found: ignore
