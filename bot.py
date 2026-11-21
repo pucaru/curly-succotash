@@ -32,6 +32,8 @@ TUNE = {
     "zone_safe": False,
     "idle_reload": False,
     "jet_escape": False,
+    "squad_aggressive": False,
+    "farm_hunt": False,
 }
 try:
     TUNE.update(json.loads(os.environ.get("MECH_TUNE", "{}") or "{}"))
@@ -375,7 +377,8 @@ class Bot:
                            ((taking_fire and self.last_bearing is not None) or
                             (t - self.last_sound_time < 1.7 and
                              self.last_sound_kind == "laser_charge")))
-        if unseen_incoming and hp < 0.92:
+        if (unseen_incoming and hp < 0.92 and
+                not (TUNE["squad_aggressive"] and not self.ffa)):
             bearing = (self.last_bearing if t - self.last_hit < 6
                        else self.last_sound_yaw)
             if bearing is not None:
@@ -388,6 +391,10 @@ class Bot:
                 retreat = (p[0] - 40 * rx, p[1] - 40 * ry)
                 if self.safety(obs, retreat):
                     return retreat, "flee", False
+        if TUNE["squad_aggressive"] and not self.ffa and target is not None:
+            if distance(p, target["pos"]) > 170:
+                return (target["pos"][0], target["pos"][1]), "finish", False
+            return (p[0], p[1]), "duel", False
         disadvantage = (hp < TUNE["cover_hp"] or
                         (taking_fire and hp < TUNE["hurt_cover_hp"]) or
                         (hp < 0.78 and outnumbered))
@@ -465,6 +472,23 @@ class Bot:
                     continue
                 val = 230 + (me["max_hp"] - me["hp"]) * 0.10 - d * 1.0
                 choices.append((val, drop["pos"][:2], "drop"))
+        if TUNE["farm_hunt"] and not local_threat and hp > 0.64:
+            for crate in obs.get("crates", []):
+                d = distance(p, crate["pos"])
+                if d > 125 or not self.safety(obs, crate["pos"], 7):
+                    continue
+                if any(distance(tr["pos"], crate["pos"]) < 55
+                       for tr, _, age in threats if age < 5):
+                    continue
+                choices.append((123 - d * 0.52, crate["pos"][:2], "farm"))
+            if hp > 0.86:
+                for npc in obs.get("mechs", []):
+                    if npc.get("kind") != "npc":
+                        continue
+                    d = distance(p, npc["pos"])
+                    if d > 115 or not self.safety(obs, npc["pos"], 8):
+                        continue
+                    choices.append((132 - d * 0.62, npc["pos"][:2], "farm"))
         # Early unarmed scouting. Persist the goal instead of changing targets at every step.
         if (not have_secondary and t < 64 and not local_threat and
                 self.scout_goal is not None and t < self.scout_until and
