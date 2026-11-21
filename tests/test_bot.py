@@ -2,7 +2,7 @@
 import math
 import unittest
 
-from bot import Bot
+from bot import Bot, TUNE
 
 
 def make_bot():
@@ -110,6 +110,29 @@ class DecisionTests(unittest.TestCase):
         second["alive"] = 15
         bot.act(second)
         self.assertTrue(bot.ffa)
+
+
+
+class InjuredFarmingTests(unittest.TestCase):
+    def test_farming_suppression_is_injury_dependent(self):
+        data = obs(t=5)
+        data["self"]["hp"] = 1020
+        data["crates"] = [{"id": 1007, "pos": [40, 0, 0], "hp": 300}]
+        before = TUNE["injured_farm_silence"]
+        try:
+            TUNE["injured_farm_silence"] = 0
+            baseline = make_bot().act(data)
+            TUNE["injured_farm_silence"] = 1
+            injured = make_bot().act(data)
+            healed_data = obs(t=5)
+            healed_data["self"]["hp"] = 1350
+            healed_data["crates"] = data["crates"]
+            healthy = make_bot().act(healed_data)
+        finally:
+            TUNE["injured_farm_silence"] = before
+        self.assertEqual(baseline.get("fire"), [True, False])
+        self.assertNotIn("fire", injured)
+        self.assertEqual(healthy.get("fire"), [True, False])
 
 
 if __name__ == "__main__":
