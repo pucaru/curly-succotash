@@ -27,6 +27,7 @@ TUNE = {
     "avoid_range": 145.0,
     "laser_value": 300.0,
     "laser_search_radius": 270.0,
+    "passive_guard_range": 0.0,
 }
 try:
     TUNE.update(json.loads(os.environ.get("MECH_TUNE", "{}") or "{}"))
@@ -684,6 +685,23 @@ class Bot:
             if candidates:
                 active = min(candidates, key=lambda c: c[0])[1]
         if active is None:
+            # Defensive facing while declining combat; no shot means regen is preserved.
+            guard_range = TUNE.get("passive_guard_range", 0.0)
+            if guard_range > 0 and threats:
+                nearby = [(tr, d, age) for tr, d, age in threats
+                          if age < 1.2 and d < guard_range]
+                if nearby:
+                    tr, d, age = min(
+                        nearby, key=lambda v: (
+                            0 if (v[0]["id"] == self.attacker and
+                                  obs["t"] < self.attacker_until) else 1,
+                            0 if v[0].get("charging", False) else 1,
+                            v[1] + 14.0 * v[2]))
+                    action["aim"] = [
+                        face(p, tr["pos"]),
+                        clamp(math.atan2(tr["pos"][2] + 4.5 - muzzle,
+                                         max(1.0, d)), -1.45, 1.45)]
+                    return
             if self.last_bearing is not None and obs["t"] - self.last_hit < 8.0:
                 action["aim"] = [self.last_bearing, 0.0]
             elif self.last_sound_yaw is not None and obs["t"] - self.last_sound_time < 4:
