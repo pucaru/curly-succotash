@@ -27,6 +27,7 @@ TUNE = {
     "avoid_range": 145.0,
     "laser_value": 300.0,
     "laser_search_radius": 270.0,
+    "visible_target_switch": 1,  # 0 baseline selection, 1 prefer live firing lane if alternatives
 }
 try:
     TUNE.update(json.loads(os.environ.get("MECH_TUNE", "{}") or "{}"))
@@ -232,6 +233,20 @@ class Bot:
             candidates.append((score, tr, d))
         if not candidates:
             return None
+        if TUNE["visible_target_switch"] and self.map is not None and len(candidates) >= 2:
+            # Firing already checks exactly this line of sight. When two
+            # candidate enemies compete, choose one we can actually shoot
+            # rather than losing the duel to a remembered enemy behind a wall.
+            # With no exposed alternative, preserve the original target.
+            here = me["pos"]
+            exposed = [
+                item for item in candidates
+                if t - item[1]["seen"] < 1.8 and
+                self.map.clear(here[0], here[1], item[1]["pos"][0],
+                               item[1]["pos"][1], inflated=False)
+            ]
+            if exposed:
+                candidates = exposed
         _, tr, d = min(candidates, key=lambda c: c[0])
         self.last_enemy_id = tr["id"]
         self.target_last = t
