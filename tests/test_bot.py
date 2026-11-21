@@ -1,8 +1,9 @@
 """Small deterministic checks for protocol-safe decisions and important combat branches."""
 import math
 import unittest
+from unittest.mock import patch
 
-from bot import Bot
+from bot import Bot, TUNE
 
 
 def make_bot():
@@ -110,6 +111,32 @@ class DecisionTests(unittest.TestCase):
         second["alive"] = 15
         bot.act(second)
         self.assertTrue(bot.ffa)
+
+
+    def test_laser_short_guard_prevents_start_when_lightning_aims_at_us(self):
+        data = obs(t=1, with_laser=True)
+        data["self"]["weapons"][1]["charge"] = 0
+        data["mechs"] = [{"kind": "mech", "id": 7,
+            "pos": [38, 0, 0], "vel": [0, 0, 0],
+            "hp": 1400, "max_hp": 1400, "aim": [math.pi, 0],
+            "weapons": ["gun", "lightning"]}]
+        with patch.dict(TUNE, {"laser_short_guard": 0}):
+            self.assertTrue(make_bot().act(data)["fire"][1])
+        with patch.dict(TUNE, {"laser_short_guard": 1}):
+            self.assertFalse(make_bot().act(data)["fire"][1])
+        data["mechs"][0]["aim"] = [0, 0]  # The arc points away.
+        with patch.dict(TUNE, {"laser_short_guard": 1}):
+            self.assertTrue(make_bot().act(data)["fire"][1])
+
+    def test_laser_short_guard_preserves_existing_charge(self):
+        data = obs(t=1, with_laser=True)
+        data["self"]["weapons"][1]["charge"] = 0.30
+        data["mechs"] = [{"kind": "mech", "id": 7,
+            "pos": [38, 0, 0], "vel": [0, 0, 0],
+            "hp": 1400, "max_hp": 1400, "aim": [math.pi, 0],
+            "weapons": ["gun", "lightning"]}]
+        with patch.dict(TUNE, {"laser_short_guard": 1}):
+            self.assertTrue(make_bot().act(data)["fire"][1])
 
 
 if __name__ == "__main__":

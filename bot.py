@@ -27,6 +27,7 @@ TUNE = {
     "avoid_range": 145.0,
     "laser_value": 300.0,
     "laser_search_radius": 270.0,
+    "laser_short_guard": 0,
 }
 try:
     TUNE.update(json.loads(os.environ.get("MECH_TUNE", "{}") or "{}"))
@@ -740,7 +741,18 @@ class Bot:
                         self.cfg.get("weapons", {}).get("laser", {}).get("charge", 0.75))
             aligned = (abs(wrap(me["aim"][0] - laseryaw)) < clamp(2.1 / d, .014, .095) and
                        abs(me["aim"][1] - laserpitch) < clamp(3.2 / d, .03, .13))
-            if d < 275 and (visible or charge > 0.2):
+            # A close enemy with lightning can cancel this charge, while charging
+            # halves our movement speed. In that narrow visible cone, use the
+            # gun and retain mobility instead of beginning a doomed laser charge.
+            # An already-charging laser completes unchanged.
+            short_risk = (TUNE["laser_short_guard"] and charge <= 0.001 and
+                          any(age <= 1.25 and td <= 49 and
+                              "lightning" in tr.get("weapons", []) and
+                              abs(wrap(face(tr["pos"], p) - tr["aim"][0])) < 0.55
+                              for tr, td, age in threats))
+            if short_risk:
+                fire[1] = False
+            elif d < 275 and (visible or charge > 0.2):
                 if charge <= 0.001:
                     fire[1] = w1.get("cooldown", 0) <= 0.11
                 elif charge < charge_s - 0.10 or not aligned:
