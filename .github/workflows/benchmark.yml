@@ -1,4 +1,4 @@
-name: Independent local match benchmark, laser-scout version
+name: Placement policy sweep
 on:
   push:
     paths:
@@ -8,34 +8,46 @@ jobs:
   simulate:
     runs-on: ubuntu-latest
     timeout-minutes: 18
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        include:
+          - label: baseline
+            tune: '{}'
+          - label: defend-early
+            tune: '{"cover_hp":0.65,"hurt_cover_hp":0.92,"duel_hp":0.67,"duel_range":105}'
+          - label: hyper-focus
+            tune: '{"focus":260,"attacker":310,"finish":180,"duel_hp":0.25,"duel_range":200,"cover_hp":0.24,"hurt_cover_hp":0.4}'
+          - label: long-kite
+            tune: '{"focus":260,"attacker":320,"finish":180,"duel_hp":0.55,"duel_range":205,"cover_hp":0.38,"hurt_cover_hp":0.66,"avoid_range":200}'
+          - label: conservative
+            tune: '{"cover_hp":0.8,"hurt_cover_hp":0.99,"duel_hp":0.85,"duel_range":65,"avoid_range":220}'
+    env:
+      MECH_TUNE: ${{ matrix.tune }}
     steps:
       - uses: actions/checkout@v4
-      - name: Retrieve independent MIT-licensed match simulator
-        shell: bash
+      - name: Retrieve simulator
         run: |
           set -euxo pipefail
-          git clone --depth=1 https://github.com/VivekRnx/bob-the-builder-2026.git "$RUNNER_TEMP/bob-sim"
-          cp bot.py arena.py "$RUNNER_TEMP/bob-sim/"
-          printf 'from bot import Bot as Brain\n' > "$RUNNER_TEMP/bob-sim/survivor_adapter.py"
-      - name: Squad practice approximation (8 seeds)
-        shell: bash
+          git clone --depth=1 https://github.com/VivekRnx/bob-the-builder-2026.git "$RUNNER_TEMP/sim"
+          cp bot.py arena.py "$RUNNER_TEMP/sim/"
+          printf 'from bot import Bot as Brain\n' > "$RUNNER_TEMP/sim/survivor_adapter.py"
+      - name: Squad / 8 paired seeds
         run: |
           set -euo pipefail
-          cd "$RUNNER_TEMP/bob-sim"
-          python3 tools/sim.py -n 8 -j 4 --seed 8191 --mode squad --hero survivor_adapter \
-            --opp tools.baseline.brain_v1 --diag 2>&1 | tee "$GITHUB_WORKSPACE/squad-results.txt"
-      - name: Independent FFA approximation (2 seeds, eight copies per lobby)
-        shell: bash
+          cd "$RUNNER_TEMP/sim"
+          python3 tools/sim.py -n 8 -j 4 --seed 8191 --mode squad --hero survivor_adapter --opp tools.baseline.brain_v1 --diag 2>&1 | tee "$GITHUB_WORKSPACE/squad-results.txt"
+      - name: FFA / 2 paired seeds
         run: |
           set -euo pipefail
-          cd "$RUNNER_TEMP/bob-sim"
-          python3 tools/sim.py -n 2 -j 2 --seed 9921 --mode ffa --hero survivor_adapter \
-            --opp tools.baseline.brain_v1 --diag 2>&1 | tee "$GITHUB_WORKSPACE/ffa-results.txt"
-      - name: Preserve benchmark outputs
+          cd "$RUNNER_TEMP/sim"
+          python3 tools/sim.py -n 2 -j 2 --seed 9921 --mode ffa --hero survivor_adapter --opp tools.baseline.brain_v1 --diag 2>&1 | tee "$GITHUB_WORKSPACE/ffa-results.txt"
+      - name: Preserve scores
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: local-benchmark-results
+          name: placement-${{ matrix.label }}
           path: |
             squad-results.txt
             ffa-results.txt
