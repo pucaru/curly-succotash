@@ -17,14 +17,14 @@ DEFENSE_RADIUS = 180.0
 # Tunable constants allow reproducible A/B runs in the local simulator.
 # Production uses the defaults; no network or model inference is required.
 TUNE = {
-    "focus": 120.0,
+    "focus": 185.0,
     "attacker": 180.0,
     "finish": 110.0,
-    "cover_hp": 0.47,
-    "hurt_cover_hp": 0.75,
-    "duel_range": 140.0,
-    "duel_hp": 0.44,
-    "avoid_range": 145.0,
+    "cover_hp": 0.41,
+    "hurt_cover_hp": 0.60,
+    "duel_range": 160.0,
+    "duel_hp": 0.30,
+    "avoid_range": 175.0,
     "laser_value": 300.0,
     "laser_search_radius": 270.0,
 }
@@ -459,7 +459,7 @@ class Bot:
             tr, d, _ = threats[0]
             vx, vy = unit(x - tr["pos"][0], y - tr["pos"][1])
             sideways = (-vy * self.strafe_dir, vx * self.strafe_dir)
-            desire = 52 if any(w and w["kind"] == "lightning" for w in me["weapons"]) else 75
+            desire = 34 if any(w and w["kind"] == "lightning" for w in me["weapons"]) else 59
             if d > desire + 14:
                 dx, dy = -vx * 0.4 + sideways[0] * 0.9, -vy * 0.4 + sideways[1] * 0.9
             elif d < desire - 19:
@@ -564,8 +564,8 @@ class Bot:
                     sy += side * uy * 4
         for tr, d, age in self.threats(p, obs["t"], 130):
             if (tr["charging"] and age < 1.0 and
-                    abs(wrap(face(tr["pos"], p) - tr["aim"][0])) < 0.24 and
-                    d < 130):
+                    abs(wrap(face(tr["pos"], p) - tr["aim"][0])) < 0.42 and
+                    d < 250):
                 ux, uy = unit(p[0] - tr["pos"][0], p[1] - tr["pos"][1])
                 sx += -uy * self.strafe_dir * 1.6
                 sy += ux * self.strafe_dir * 1.6
@@ -692,8 +692,8 @@ class Bot:
         if w0 and w0["kind"] == "gun":
             if (visible and d < 220 and w0.get("cooldown", 0) <= 0.11 and
                     w0.get("ammo", 0) > 0 and
-                    abs(wrap(me["aim"][0] - gunyaw)) < clamp(2.3 / d, 0.015, .10) and
-                    abs(me["aim"][1] - gunpitch) < clamp(3.4 / d, .032, .13)):
+                    abs(wrap(me["aim"][0] - gunyaw)) < clamp(4.3 / d, 0.031, .16) and
+                    abs(me["aim"][1] - gunpitch) < clamp(5.2 / d, .059, .19)):
                 fire[0] = True
             if w0.get("ammo", 0) <= 0 or (
                     w0.get("ammo", 0) <= 3 and d > 115 and
@@ -735,7 +735,11 @@ class Bot:
                     break
         move, boost, jump = self.steer(obs, goal, mode, urgent, threats)
         a["move"] = self.dodge(obs, move)
-        a["boost"] = boost
+        a["boost"] = boost or (
+            me["energy"] > 39 and me["grounded"] and
+            any(tr["charging"] and age < 1.1 and d < 240 and
+                abs(wrap(face(tr["pos"], p) - tr["aim"][0])) < 0.45
+                for tr, d, age in threats[:3]))
         a["jump"] = jump
         self.aim_and_fire(obs, target, mode, threats, a)
         # If hiding to regenerate, avoid dealing damage.
