@@ -41,4 +41,6 @@ python3 "$KIT/check/check.py" --map-dir /arena -- \
 
 For an official practice run, submit this public repository URL on the Builders site. The selected commit must be kept fetchable, public and buildable through results publication. Submit only tested commits. The event cutoff is November 23, 2026, at 00:00 Singapore time.
 
+## License
+
 This repository is licensed MIT. The kit's unchanged protocol wrapper remains attributed to the organizer.
