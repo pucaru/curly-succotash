@@ -2,7 +2,7 @@ name: Independent squad selective engagement screen
 on:
   push:
     branches:
-      - experiment/selective-engage-20261121-2227
+      - experiment/squad-selective-engage-20261121-2227
     paths:
       - .github/workflows/selective-engage.yml
   workflow_dispatch:
@@ -23,7 +23,7 @@ jobs:
       OPP_KIND: ${{ matrix.opponent }}
     steps:
       - uses: actions/checkout@v4
-      - name: Configure exactly one selective-engageing cutoff and opponent group
+      - name: Configure exactly one squad unprovoked engagement range
         shell: bash
         run: |
           set -euo pipefail
@@ -48,14 +48,14 @@ jobs:
           cp "$GITHUB_WORKSPACE/bot.py" "$GITHUB_WORKSPACE/arena.py" .
           cp "$GITHUB_WORKSPACE/bench/one_hero_ffa.py" tools/one_hero_ffa.py
           printf 'from bot import Bot as Brain\n' > survivor_adapter.py
-      - name: Cooperative squad - 24 independent paired seeds
+      - name: Cooperative squad - 12 new paired seeds
         shell: bash
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP/sim"
           python3 tools/sim.py -n 12 -j 4 --seed 1410211 --mode squad \
             --hero survivor_adapter --opp "$OPP" --diag 2>&1 | tee "$GITHUB_WORKSPACE/squad-selective-engage.txt"
-      - name: One-entrant FFA - 24 independent paired seeds
+      - name: One-entrant FFA - 12 new paired seeds
         shell: bash
         run: |
           set -euo pipefail
@@ -82,7 +82,7 @@ jobs:
         with:
           pattern: selective-engage-*
           path: bench-artifacts
-      - name: Check all 432 placements and publish paired zone-exposure audit
+      - name: Validate 216 paired matches and publish squad/FFA safety audit
         run: python3 bench/aggregate_selective_engage.py
       - name: Upload audit summary
         if: always()
