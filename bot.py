@@ -27,6 +27,7 @@ TUNE = {
     "avoid_range": 145.0,
     "laser_value": 300.0,
     "laser_search_radius": 270.0,
+    "blocked_duel": 1,  # 0 original, 1 find lane/hold, 2 find lane/route
 }
 try:
     TUNE.update(json.loads(os.environ.get("MECH_TUNE", "{}") or "{}"))
@@ -99,6 +100,9 @@ class Bot:
         self.hold_until = -100.0
         self.cover = None
         self.cover_until = -100.0
+        self.lane_goal = None
+        self.lane_target = None
+        self.lane_until = -100.0
         self.last_enemy_id = None
         self.last_danger = 0.0
         self.target_last = -100.0
@@ -339,6 +343,47 @@ class Bot:
             self.cover_until = t + 0.75
         return best
 
+    def firing_lane(self, obs, target):
+        """Short, zone-safe firing lane when a wall occludes a selected duel.
+
+        Only called for a selected isolated target in the squad-like mode.
+        The nearest visible line is not necessarily walkable, so both checks
+        must pass; the existing navigator handles intermediate obstacles.
+        """
+        if self.map is None:
+            return None
+        me, t = obs["self"], obs["t"]
+        pos, ep = me["pos"], target["pos"]
+        ident = target["id"]
+        if (self.lane_target == ident and self.lane_goal is not None and
+                t < self.lane_until and self.safety(obs, self.lane_goal, 5) and
+                self.map.clear(pos[0], pos[1], *self.lane_goal) and
+                self.map.clear(*self.lane_goal, ep[0], ep[1], inflated=False)):
+            return self.lane_goal
+        best = None
+        best_cost = float("inf")
+        for radius in (20, 42, 64):
+            for i in range(12):
+                theta = TAU * i / 12 + self.slot * .13
+                x = pos[0] + radius * math.cos(theta)
+                y = pos[1] + radius * math.sin(theta)
+                d = distance((x, y), ep)
+                if d < 47 or d > 165:
+                    continue
+                if not self.map.free(x, y) or not self.safety(obs, (x, y), 5):
+                    continue
+                if not self.map.clear(pos[0], pos[1], x, y):
+                    continue
+                if not self.map.clear(x, y, ep[0], ep[1], inflated=False):
+                    continue
+                cost = radius + .32 * abs(d - 78)
+                if cost < best_cost:
+                    best, best_cost = (x, y), cost
+        if best is not None:
+            self.lane_goal, self.lane_target = best, ident
+            self.lane_until = t + 2.2
+        return best
+
     def choose_goal(self, obs, threats, target):
         me, z, t = obs["self"], obs["zone"], obs["t"]
         p = me["pos"]
@@ -494,6 +539,18 @@ class Bot:
             hp_enemy = target["hp"] / max(1, target["max_hp"])
             # Fight one hunter when safe; retreat if it can draw other squad members.
             if d < TUNE["duel_range"] and hp > TUNE["duel_hp"] and close < 2:
+                if (TUNE["blocked_duel"] and self.map is not None and
+                        not self.map.clear(p[0], p[1], target["pos"][0],
+                                           target["pos"][1], inflated=False)):
+                    lane = self.firing_lane(obs, target)
+                    if lane is not None:
+                        return lane, "lane", False
+                    # A blocked stationary duel cannot produce gun damage.
+                    # Routing is deliberately conditional to avoid pursuing
+                    # behind walls when an alternative firing lane was absent.
+                    if TUNE["blocked_duel"] >= 2 and d > 68:
+                        return (target["pos"][0], target["pos"][1]), "lane", False
+                    return center, "hold", False
                 return (p[0], p[1]), "duel", False
             if d > 115 and d < 200 and hp > 0.60 and hp_enemy < 0.42 and close < 2:
                 return (target["pos"][0], target["pos"][1]), "finish", False
