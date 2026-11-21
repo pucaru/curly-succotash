@@ -27,7 +27,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo "MECH_TUNE={\"squad_first_shrink_mode\":${VALUE}}" >> "$GITHUB_ENV"
+          echo "MECH_TUNE={\"pre_shrink_ffa_only\":${VALUE}}" >> "$GITHUB_ENV"
           case "$OPP_KIND" in
             v1) echo 'OPP=tools.baseline.brain_v1' >> "$GITHUB_ENV" ;;
             v2) echo 'OPP=tools.baseline.brain_v2' >> "$GITHUB_ENV" ;;
@@ -78,7 +78,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - name: Download all nine comparison artifacts
+      - name: Download all six paired cells
         uses: actions/download-artifact@v4
         with:
           pattern: pre-shrink-mode-*
