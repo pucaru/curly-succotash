@@ -63,7 +63,7 @@ def summarize():
         "Proxy simulator only; scores are not official. Control 0 preserves production behavior.",
         "Three entry margins, three populations, two modes, 24 fresh matched seeds per cell = 432 matches.",
         "",
-        "| Opponents | 24 squad | 24 FFA | 0 squad | 0 FFA | 64 squad | 64 FFA |",
+        "| Opponents | 0 squad | 0 FFA | 24 squad | 24 FFA | 64 squad | 64 FFA |",
         "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for opponent in OPPONENTS:
