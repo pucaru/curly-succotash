@@ -1,0 +1,42 @@
+name: Independent local match benchmark
+on:
+  push:
+    paths:
+      - .github/workflows/benchmark.yml
+  workflow_dispatch:
+jobs:
+  simulate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Retrieve independent MIT-licensed match simulator
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git clone --depth=1 https://github.com/VivekRnx/bob-the-builder-2026.git "$RUNNER_TEMP/bob-sim"
+          cp bot.py arena.py "$RUNNER_TEMP/bob-sim/"
+          printf 'from bot import Bot as Brain\n' > "$RUNNER_TEMP/bob-sim/survivor_adapter.py"
+      - name: Squad practice approximation (4 new seeds)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/bob-sim"
+          python3 tools/sim.py -n 4 -j 2 --seed 8191 --mode squad --hero survivor_adapter \
+            --opp tools.baseline.brain_v1 --diag 2>&1 | tee "$GITHUB_WORKSPACE/squad-results.txt"
+      - name: Independent FFA approximation (2 seeds, eight copies per lobby)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/bob-sim"
+          python3 tools/sim.py -n 2 -j 2 --seed 9921 --mode ffa --hero survivor_adapter \
+            --opp tools.baseline.brain_v1 --diag 2>&1 | tee "$GITHUB_WORKSPACE/ffa-results.txt"
+      - name: Preserve benchmark outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-benchmark-results
+          path: |
+            squad-results.txt
+            ffa-results.txt
+          if-no-files-found: ignore
