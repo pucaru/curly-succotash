@@ -37,6 +37,7 @@ jobs:
       - name: Syntax and strategy conformance
         run: |
           python3 -m py_compile bot.py arena.py mechfight.py bench/one_hero_ffa.py bench/aggregate_preempt_cover.py
+          python3 -c 'import os; from bot import TUNE; assert TUNE["preempt_cover_range"] == float(os.environ["VALUE"])'
           python3 -m unittest discover -s tests -v
       - name: Clone reproducible independently implemented MIT simulation
         shell: bash
