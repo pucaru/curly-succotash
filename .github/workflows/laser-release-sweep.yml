@@ -1,0 +1,73 @@
+name: Independent laser release-window placement sweep
+on:
+  push:
+    branches:
+      - experiment/laser-release-window-20261121-1934
+    paths:
+      - bot.py
+      - bench/one_hero_ffa.py
+      - tests/test_laser_release.py
+      - .github/workflows/laser-release-sweep.yml
+  workflow_dispatch:
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 38
+    strategy:
+      fail-fast: false
+      matrix:
+        margin: [0.0, 0.1, 0.2]
+        opponent: [v1, v2, mixed]
+    env:
+      MARGIN: ${{ matrix.margin }}
+      OPP_KIND: ${{ matrix.opponent }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set laser charge release margin and opponents
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "MECH_TUNE={\"laser_release_margin\":${MARGIN}}" >> "$GITHUB_ENV"
+          case "$OPP_KIND" in
+            v1) echo 'OPP=tools.baseline.brain_v1' >> "$GITHUB_ENV" ;;
+            v2) echo 'OPP=tools.baseline.brain_v2' >> "$GITHUB_ENV" ;;
+            mixed) echo 'OPP=tools.baseline.brain_v1,tools.baseline.brain_v1,tools.baseline.brain_v2,tools.baseline.brain_v2' >> "$GITHUB_ENV" ;;
+            *) exit 2 ;;
+          esac
+      - name: Python syntax and regression tests
+        run: |
+          python3 -m py_compile bot.py arena.py mechfight.py bench/one_hero_ffa.py
+          python3 -m unittest discover -s tests -v
+      - name: Pin external MIT simulator to stable revision
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/VivekRnx/bob-the-builder-2026.git "$RUNNER_TEMP/sim"
+          cd "$RUNNER_TEMP/sim"
+          git checkout --detach b76c216d8a7829e14409a42058eea93e46e9ccdb
+          cp "$GITHUB_WORKSPACE/bot.py" "$GITHUB_WORKSPACE/arena.py" .
+          cp "$GITHUB_WORKSPACE/bench/one_hero_ffa.py" tools/one_hero_ffa.py
+          printf 'from bot import Bot as Brain\n' > survivor_adapter.py
+      - name: Cooperative squad on 24 fresh paired seeds
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/sim"
+          python3 tools/sim.py -n 24 -j 4 --seed 991121 --mode squad \
+            --hero survivor_adapter --opp "$OPP" --diag 2>&1 | tee "$GITHUB_WORKSPACE/squad-laser-release.txt"
+      - name: Single-entry FFA on 24 fresh paired seeds
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/sim"
+          python3 tools/one_hero_ffa.py -n 24 -j 4 --seed 1091121 \
+            --opp "$OPP" 2>&1 | tee "$GITHUB_WORKSPACE/ffa-laser-release.txt"
+      - name: Preserve diagnostic output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: laser-window-${{ matrix.margin }}-${{ matrix.opponent }}
+          path: |
+            squad-laser-release.txt
+            ffa-laser-release.txt
+          if-no-files-found: ignore
