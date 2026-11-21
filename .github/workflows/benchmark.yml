@@ -1,4 +1,4 @@
-name: Independent local match benchmark, laser-scout version
+name: Independent local match benchmark, laser-evasion branch
 on:
   push:
     paths:
