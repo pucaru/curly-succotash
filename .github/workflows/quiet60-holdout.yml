@@ -1,0 +1,93 @@
+name: Independent quiet-60 fresh-seed holdout
+on:
+  push:
+    branches:
+      - experiment/quiet60-holdout-20261121-2230
+    paths:
+      - .github/workflows/quiet60-holdout.yml
+  workflow_dispatch:
+concurrency:
+  group: quiet60-holdout-20261121-2230
+  cancel-in-progress: false
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    strategy:
+      fail-fast: false
+      matrix:
+        quiet_until: [0, 60]
+        opponent: [v1, v2, mixed]
+    env:
+      VALUE: ${{ matrix.quiet_until }}
+      OPP_KIND: ${{ matrix.opponent }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure fixed variant and independent opponent mix
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "MECH_TUNE={\"quiet_farm_until\":${VALUE}}" >> "$GITHUB_ENV"
+          case "$OPP_KIND" in
+            v1) echo 'OPP=tools.baseline.brain_v1' >> "$GITHUB_ENV" ;;
+            v2) echo 'OPP=tools.baseline.brain_v2' >> "$GITHUB_ENV" ;;
+            mixed) echo 'OPP=tools.baseline.brain_v1,tools.baseline.brain_v1,tools.baseline.brain_v2,tools.baseline.brain_v2' >> "$GITHUB_ENV" ;;
+            *) exit 2 ;;
+          esac
+      - name: Validate source and behavioral controls
+        run: |
+          python3 -m py_compile bot.py arena.py mechfight.py bench/one_hero_ffa.py bench/aggregate_quiet60_holdout.py
+          python3 -m unittest discover -s tests -v
+      - name: Pin independent MIT approximation
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/VivekRnx/bob-the-builder-2026.git "$RUNNER_TEMP/sim"
+          cd "$RUNNER_TEMP/sim"
+          git checkout --detach b76c216d8a7829e14409a42058eea93e46e9ccdb
+          cp "$GITHUB_WORKSPACE/bot.py" "$GITHUB_WORKSPACE/arena.py" .
+          cp "$GITHUB_WORKSPACE/bench/one_hero_ffa.py" tools/one_hero_ffa.py
+          printf 'from bot import Bot as Brain\n' > survivor_adapter.py
+      - name: Cooperative squad 32 new paired seeds
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/sim"
+          python3 tools/sim.py -n 32 -j 4 --seed 1317211 --mode squad \
+            --hero survivor_adapter --opp "$OPP" --diag 2>&1 | tee "$GITHUB_WORKSPACE/squad-quiet60-holdout.txt"
+      - name: One-entrant FFA 64 new paired seeds
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/sim"
+          python3 tools/one_hero_ffa.py -n 64 -j 4 --seed 1327211 \
+            --opp "$OPP" 2>&1 | tee "$GITHUB_WORKSPACE/ffa-quiet60-holdout.txt"
+      - name: Upload per-seed logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quiet60-holdout-${{ matrix.quiet_until }}-${{ matrix.opponent }}
+          path: |
+            squad-quiet60-holdout.txt
+            ffa-quiet60-holdout.txt
+          if-no-files-found: ignore
+  aggregate:
+    needs: compare
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Retrieve all six paired cells
+        uses: actions/download-artifact@v4
+        with:
+          pattern: quiet60-holdout-*
+          path: bench-artifacts
+      - name: Validate all 576 games, matched seeds, safety and confidence intervals
+        run: python3 bench/aggregate_quiet60_holdout.py
+      - name: Preserve audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quiet60-holdout-summary
+          path: quiet60-holdout-results.md
+          if-no-files-found: ignore
