@@ -13,3 +13,14 @@ Six cells: `quiet_farm_until=0 vs 60` × v1/v2/mixed opponents. Each 32 **new** 
 The aggregator fails on missing/duplicate/wrong seed coverage, computes matched W/L/T, 4,000-resample paired bootstrap 95% confidence intervals, early deaths, rear damage, outside-zone exposure, and action latency. Reject on negative group mean, increased FFA early deaths or zone exposure. A passing holdout is *not* authorization to modify `main`: end-circle audit, actual conformance on candidate's production-default values and user approval of any official submission remain required.
 
 Do not resurrect the removed public-research material, record competitor code or rewrite submitted history.
+
+## Partial holdout audit (21 November, 22:31 SGT)
+
+Four fully completed matrix cells (`0/60 × v1/mixed`) were independently extracted from the GitHub Actions logs using exact paired seed sets: 32 squad and 64 single-entrant FFA seeds in each cell. **This candidate already fails the preregistered safety/placement gate, even before the slower v2 jobs finish.** Treat the 60-second suppression as rejected for production; do not cherry-pick the mixed-population improvement.
+
+| Opponents | Squad paired Δ (W/L/T) | FFA 0→60 mean | FFA paired Δ (W/L/T) | Early FFA ≤2 points | FFA rear damage Δ | FFA out-of-zone Δ |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| v1 | +0.125 (5/1/26) | 7.484→7.313 | **−0.172** (8/13/43) | **5→7** | −49.9 | −0.006 s |
+| mixed | +0.156 (7/3/22) | 6.234→6.797 | +0.563 (16/10/38) | 11→8 | −147.3 | **+0.181 s** |
+
+The v1 FFA mean and early-death count fail, while mixed zone exposure increases. Results are from the independent approximation, not the official 48-match scorer. Do not alter production. The remaining v2 cells are still running; once finished, verify the full aggregate, bootstrap confidence intervals, and record final outcomes. The larger holdout reverses the earlier small-screen v1 FFA gain (+0.333), demonstrating the screening instability. No official submission.
