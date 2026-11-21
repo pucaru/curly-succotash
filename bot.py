@@ -27,6 +27,7 @@ TUNE = {
     "avoid_range": 145.0,
     "laser_value": 300.0,
     "laser_search_radius": 270.0,
+    "duel_orbit_commit": 0,
 }
 try:
     TUNE.update(json.loads(os.environ.get("MECH_TUNE", "{}") or "{}"))
@@ -522,7 +523,18 @@ class Bot:
                 except Exception:
                     pass
             dx, dy = gx - x, gy - y
-        if t > self.strafe_until:
+        if TUNE["duel_orbit_commit"] and mode == "duel":
+            # Movement requires ~0.4 s to reverse; a 0.7-1.4 s oscillation
+            # spends much of every duel decelerating in the same small area.
+            # Commit to a longer lateral arc only while a solo duel is active.
+            # Reverse before committing into an obstacle or outside the circle.
+            unsafe_arc = not self.safety(obs, (x + dx * 20, y + dy * 20), 5)
+            blocked_arc = (self.map is not None and
+                           not self.map.free(x + dx * 11, y + dy * 11))
+            if t > self.strafe_until or unsafe_arc or blocked_arc:
+                self.strafe_dir *= -1
+                self.strafe_until = t + self.rng.uniform(2.8, 3.8)
+        elif t > self.strafe_until:
             self.strafe_dir *= -1
             self.strafe_until = t + self.rng.uniform(0.7, 1.4)
         if mode in ("hold", "scout", "weapon", "cube", "drop") and not urgent:
