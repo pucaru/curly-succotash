@@ -25,6 +25,8 @@ TUNE = {
     "duel_range": 140.0,
     "duel_hp": 0.44,
     "avoid_range": 145.0,
+    "laser_value": 300.0,
+    "laser_search_radius": 270.0,
 }
 try:
     TUNE.update(json.loads(os.environ.get("MECH_TUNE", "{}") or "{}"))
@@ -100,6 +102,9 @@ class Bot:
         self.last_enemy_id = None
         self.last_danger = 0.0
         self.target_last = -100.0
+        self.scout_goal = None
+        self.scout_until = -100.0
+        self.explored = set()
 
     def update(self, obs):
         t = obs["t"]
@@ -163,6 +168,7 @@ class Bot:
         for ident, until in list(self.bad_pickups.items()):
             if until < t:
                 del self.bad_pickups[ident]
+        self.explored.add((round(own_pos[0] / 25), round(own_pos[1] / 25)))
         self.last_time = t
 
     def threats(self, pos, t, radius=220):
@@ -357,23 +363,27 @@ class Bot:
             if kind in weapons or kind not in RANK:
                 continue
             d = distance(p, pck["pos"])
-            if abs(p[2] - pck["pos"][2]) > 4.5 or d > 155:
+            if (abs(p[2] - pck["pos"][2]) > 4.5 or
+                    d > (TUNE["laser_search_radius"] if kind == "laser" else 145)): 
                 continue
             if not self.safety(obs, pck["pos"], 7):
                 continue
             if any(distance(tr["pos"], pck["pos"]) < 40
                    for tr, _, a in threats if a < 4):
                 continue
-            if local_threat and d > 25:
+            if local_threat and d > 55 and (
+                    kind != "laser" or hp < 0.72 or
+                    t - self.last_hit < 4.5 or nearest < 70):
                 continue
-            value = {"laser": 175, "lightning": 118, "mortar": 83}.get(kind, 0)
+            value = {"laser": TUNE["laser_value"],
+                     "lightning": 145, "mortar": 95}.get(kind, 0)
             if have_secondary:
                 value -= 115
                 if have_laser and kind != "lightning":
                     value -= 100
             if have_secondary and me["weapons"][1]["kind"] == "laser" and kind != "laser":
                 value = -1
-            score = value - d * 0.85 - (t - seen) * 0.30
+            score = value - d * (0.37 if kind == "laser" else 0.73) - (t - seen) * 0.30
             if score > 0:
                 choices.append((score, (pck["pos"][0], pck["pos"][1]), "weapon"))
         if not local_threat:
@@ -397,9 +407,15 @@ class Bot:
                     continue
                 val = 230 + (me["max_hp"] - me["hp"]) * 0.10 - d * 1.0
                 choices.append((val, drop["pos"][:2], "drop"))
-        # Early unarmed scouting. Search open areas where a weapon is likely.
+        # Early unarmed scouting. Persist the goal instead of changing targets at every step.
+        if (not have_secondary and t < 64 and not local_threat and
+                self.scout_goal is not None and t < self.scout_until and
+                self.safety(obs, self.scout_goal)):
+            if distance(p, self.scout_goal) > 8:
+                choices.append((93 - distance(p, self.scout_goal) * 0.09,
+                                self.scout_goal, "scout"))
         if not have_secondary and t < 64 and not local_threat:
-            for d in (32, 60, 92):
+            for d in (55, 90, 130):
                 for i in range(12):
                     a = i * TAU / 12 + self.slot * 0.3
                     goal = (p[0] + math.cos(a) * d, p[1] + math.sin(a) * d)
@@ -407,9 +423,11 @@ class Bot:
                         continue
                     if not self.safety(obs, goal, 12):
                         continue
-                    searched = sum(1 for v in self.loot.values()
-                                   if distance(v[0]["pos"], goal) < 28)
-                    score = 73 - d * 0.24 + searched * 7
+                    explored_distance = min(
+                        (math.hypot(goal[0] - kx * 25, goal[1] - ky * 25)
+                         for kx, ky in self.explored),
+                        default=125)
+                    score = 89 - d * 0.05 + min(120, explored_distance) * .19
                     if self.hold is not None and distance(goal, self.hold) < 8:
                         score += 2
                     if choices and max(c[0] for c in choices) > score:
@@ -419,6 +437,9 @@ class Bot:
         if choices and (not local_threat or target is None):
             score, place, mode = max(choices, key=lambda c: c[0])
             if score > 30:
+                if mode == "scout":
+                    self.scout_goal = tuple(place)
+                    self.scout_until = t + 9
                 return place, mode, False
         if target is not None and not self.ffa:
             d = distance(p, target["pos"])
@@ -491,7 +512,9 @@ class Bot:
                 self.stuck = 0
         self.prev_pos = p[:]
         boost = (urgent or mode in ("cover", "flee", "finish") or
-                 (mode == "zone" and distance(p, goal) > 38)) and energy > 28
+                 (mode == "zone" and distance(p, goal) > 38) or
+                 (mode == "weapon" and me["weapons"][1] is None and
+                  distance(p, goal) > 15)) and energy > 28
         jump = False
         if t < self.unstuck_until:
             dx, dy = math.cos(self.unstuck_yaw), math.sin(self.unstuck_yaw)
