@@ -1,4 +1,4 @@
-name: Independent local match benchmark, target-focus version
+name: Independent local match benchmark, laser-scout version
 on:
   push:
     paths:
