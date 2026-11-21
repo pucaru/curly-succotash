@@ -20,3 +20,20 @@ No official tournament submission; no competitor source code or public competito
 [Original 432-game screening run](https://github.com/pucaru/curly-succotash/actions/runs/44912264906): all **9/9 simulation cells passed**, as did [native/unit/Docker conformance](https://github.com/pucaru/curly-succotash/actions/runs/44912264689). The aggregate job failed before displaying the summary because GitHub Actions rendered YAML matrix value `2.0` as artifact suffix `2`, while our parser expected `2.0`. The aggregator also printed its first two numeric column labels in the wrong order.
 
 The parser now canonicalizes integer-valued YAML floats and labels columns in the true `VALUES=(4.5,1.4,2.0)` order. A recovery workflow downloads the **original immutable nine artifacts by run ID** and recomputes the audit, without simulating a single extra game. No results have been promoted or discarded to hide the reporting failure.
+
+
+## Recovered final placement audit — both candidates rejected
+
+[Recovery workflow SUCCESS](https://github.com/pucaru/curly-succotash/actions/runs/44913434921): validated original nine archived cell results, all **432** matched placements and diagnostics, corrected float matrix artifact lookups, and uploaded a consolidated audit. The [first run](https://github.com/pucaru/curly-succotash/actions/runs/44912264906) retains its aggregate FAILURE as an honest audit trail; no extra matches were computed to erase or replace its data. [Conformance SUCCESS](https://github.com/pucaru/curly-succotash/actions/runs/44913434822). Maximum independent-proxy decision time 19.44ms.
+
+| Opponent | Original 4.5m squad | Original 4.5m FFA | 1.4m squad | 1.4m FFA | 2.0m squad | 2.0m FFA |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| v1 | 0.458 | 10.292 | 0.625 | 9.500 | 0.542 | 9.708 |
+| v2 | 0.500 | 7.833 | 0.083 | 7.792 | 0.375 | 8.000 |
+| mixed | 0.792 | 8.042 | 0.625 | 8.125 | 0.833 | 7.958 |
+
+**1.4m rejected:** paired FFA v1 -0.792 (4 wins/15 losses/5 ties), v2 -0.042, mixed +0.083; squad v2 -0.417 and mixed -0.167; early FFA deaths v2 0→1; rear damage v2 +88.1, mixed +108.5.
+
+**2.0m rejected:** paired FFA v1 -0.583, v2 +0.167, mixed -0.083; squad v2 -0.125; early FFA deaths v2 0→1; rear damage v2 +69.6 and mixed +71.9.
+
+The crate classification/aim-height error is real, but this simulator cannot establish that fixing it increases placement; no new mechanic change is promoted. This is a documented negative result and should not be retuned until a causal analysis or more faithful scorer warrants it. **Keep `main@60b5438af4d45af989f63bffcbe0b03250a23ae4` unchanged; no official submissions.**
