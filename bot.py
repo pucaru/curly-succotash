@@ -27,6 +27,7 @@ TUNE = {
     "avoid_range": 145.0,
     "laser_value": 300.0,
     "laser_search_radius": 270.0,
+    "lightning_flank_veto": 0,
 }
 try:
     TUNE.update(json.loads(os.environ.get("MECH_TUNE", "{}") or "{}"))
@@ -489,6 +490,38 @@ class Bot:
                     self.scout_goal = tuple(place)
                     self.scout_until = t + 9
                 return place, mode, False
+        # Experiment: only create extra distance from a short-range lightning
+        # opponent when no second visible hunter or recent off-angle hit makes
+        # the retreat an obvious flank exposure. Preserve baseline otherwise.
+        if target is not None and TUNE["lightning_flank_veto"]:
+            td = distance(p, target["pos"])
+            if (t - target["seen"] < 2.0 and td < 58 and hp > 0.25 and
+                    "lightning" in target.get("weapons", ())):
+                other_hunter = any(
+                    tr["id"] != target["id"] and age < 3.5 and d < 165
+                    for tr, d, age in threats)
+                source_yaw = face(p, target["pos"])
+                other_recent_hit = (
+                    t - self.last_hit < 4.0 and self.last_bearing is not None
+                    and abs(wrap(self.last_bearing - source_yaw)) > 0.75)
+                if not other_hunter and not other_recent_hit:
+                    rx, ry = unit(p[0] - target["pos"][0],
+                                  p[1] - target["pos"][1])
+                    # Candidate paths must remain reachable and zone-safe;
+                    # prefer direct separation but turn around obstacles.
+                    for length in (34.0, 23.0, 14.0):
+                        for angle in (0.0, 0.48, -0.48, 0.90, -0.90):
+                            ux = rx * math.cos(angle) - ry * math.sin(angle)
+                            uy = rx * math.sin(angle) + ry * math.cos(angle)
+                            retreat = (p[0] + length * ux, p[1] + length * uy)
+                            if not self.safety(obs, retreat, 7):
+                                continue
+                            if self.map is not None and (
+                                    not self.map.free(*retreat) or
+                                    not self.map.clear(p[0], p[1],
+                                                       retreat[0], retreat[1])):
+                                continue
+                            return retreat, "spacing", False
         if target is not None and not self.ffa:
             d = distance(p, target["pos"])
             hp_enemy = target["hp"] / max(1, target["max_hp"])
@@ -577,6 +610,9 @@ class Bot:
                 self.stuck = 0
         self.prev_pos = p[:]
         boost = (urgent or mode in ("cover", "flee", "finish") or
+                 (mode == "spacing" and energy > 58 and
+                  any(d < 47 and a < 2 and "lightning" in tr.get("weapons", ())
+                      for tr, d, a in threats)) or
                  (mode == "zone" and distance(p, goal) > 38) or
                  (mode == "weapon" and me["weapons"][1] is None and
                   distance(p, goal) > 15)) and energy > 28
