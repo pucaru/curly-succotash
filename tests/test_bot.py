@@ -2,7 +2,7 @@
 import math
 import unittest
 
-from bot import Bot
+from bot import Bot, TUNE
 
 
 def make_bot():
@@ -101,6 +101,26 @@ class DecisionTests(unittest.TestCase):
                             "dist": "mid", "age": 0}]
         action = bot.act(data)
         self.assertAlmostEqual(action["aim"][0], math.pi / 2, places=3)
+
+    def test_stalled_duel_detects_and_breaks_wall_contact(self):
+        """The original moving flag explicitly excluded every duel."""
+        baseline = TUNE["duel_stall_recovery"]
+        try:
+            for setting, want_recovery in ((0, False), (1, True)):
+                TUNE["duel_stall_recovery"] = setting
+                bot = make_bot()
+                enemy = {"id": 7, "pos": [70.0, 0.0, 0.0]}
+                jumps = []
+                for i in range(22):
+                    dat = obs(t=10 + i * 0.1)
+                    _, _, jump = bot.steer(
+                        dat, (0, 0), "duel", False, [(enemy, 70, 0)])
+                    # Simulate collision against an obstacle: position fixed
+                    # despite issued lateral commands for consecutive ticks.
+                    jumps.append(jump)
+                self.assertEqual(any(jumps), want_recovery)
+        finally:
+            TUNE["duel_stall_recovery"] = baseline
 
     def test_detect_independent_death_early(self):
         bot = make_bot()
