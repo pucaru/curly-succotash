@@ -27,6 +27,7 @@ TUNE = {
     "avoid_range": 145.0,
     "laser_value": 300.0,
     "laser_search_radius": 270.0,
+    "pre_shrink_ffa_only": 0,
 }
 try:
     TUNE.update(json.loads(os.environ.get("MECH_TUNE", "{}") or "{}"))
@@ -88,6 +89,7 @@ class Bot:
         self.kills = 0
         self.other_deaths = 0
         self.ffa = False
+        self.first_shrink = None
         self.last_time = 0.0
         self.strafe_dir = 1
         self.strafe_until = 0.0
@@ -136,8 +138,14 @@ class Bot:
         dropped = max(0, self.prev_alive - int(obs.get("alive", self.prev_alive)))
         self.other_deaths += max(0, dropped - kills_now)
         self.prev_alive = int(obs.get("alive", self.prev_alive))
+        # External eliminations are not proof of FFA: cooperative house bots
+        # may die to the closing zone. Record the first phase boundary once;
+        # subsequent zone reports can point to a newer shrink phase.
+        if self.first_shrink is None:
+            self.first_shrink = obs.get("zone", {}).get("shrink_start", 1e9)
         if ((t < 50 and self.other_deaths >= 1) or
-                (t >= 50 and self.other_deaths >= 2)):
+                (t >= 50 and self.other_deaths >= 2 and
+                 (not TUNE["pre_shrink_ffa_only"] or t < self.first_shrink))):
             self.ffa = True
         for ent in obs.get("mechs", []):
             if ent.get("kind") != "mech":
