@@ -1,0 +1,64 @@
+name: Keep evading at holding point paired A/B
+on:
+  push:
+    branches:
+      - experiment/hold-repulsion-20261121-1805
+    paths:
+      - bot.py
+      - tests/test_hold_repulsion.py
+      - .github/workflows/hold-repulsion.yml
+  workflow_dispatch:
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 24
+    strategy:
+      fail-fast: false
+      matrix:
+        radius: [0.0, 130.0, 200.0]
+        opponent: [tools.baseline.brain_v1, tools.baseline.brain_v2]
+    env:
+      RADIUS: ${{ matrix.radius }}
+      OPP: ${{ matrix.opponent }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure hold-position evasion threshold
+        shell: bash
+        run: |
+          echo "MECH_TUNE={\"hold_evasion_radius\":${RADIUS}}" >> "$GITHUB_ENV"
+      - name: Regression tests and syntax
+        run: |
+          python3 -m py_compile bot.py arena.py mechfight.py
+          python3 -m unittest discover -s tests -v
+      - name: Load pinned MIT-licensed independent simulator
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/VivekRnx/bob-the-builder-2026.git "$RUNNER_TEMP/sim"
+          cd "$RUNNER_TEMP/sim"
+          git checkout --detach b76c216d8a7829e14409a42058eea93e46e9ccdb
+          cp "$GITHUB_WORKSPACE/bot.py" "$GITHUB_WORKSPACE/arena.py" .
+          printf 'from bot import Bot as Brain\n' > survivor_adapter.py
+      - name: Cooperative 15-hunter squad - 24 paired new seeds
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/sim"
+          python3 tools/sim.py -n 24 -j 4 --seed 330621 --mode squad \
+            --hero survivor_adapter --opp "$OPP" --diag 2>&1 | tee "$GITHUB_WORKSPACE/squad-repulsion.txt"
+      - name: Eight-hero FFA approximation - 12 paired new seeds
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/sim"
+          python3 tools/sim.py -n 12 -j 4 --seed 550621 --mode ffa \
+            --hero survivor_adapter --opp "$OPP" --diag 2>&1 | tee "$GITHUB_WORKSPACE/ffa-repulsion.txt"
+      - name: Preserve per-match results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hold-repulsion-${{ matrix.radius }}-${{ matrix.opponent }}
+          path: |
+            squad-repulsion.txt
+            ffa-repulsion.txt
+          if-no-files-found: ignore
