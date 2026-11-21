@@ -23,6 +23,7 @@ TUNE = {
     "cover_hp": 0.47,
     "hurt_cover_hp": 0.75,
     "duel_range": 140.0,
+    "zone_laser_mobility": 0,
     "duel_hp": 0.44,
     "avoid_range": 145.0,
     "laser_value": 300.0,
@@ -808,6 +809,13 @@ class Bot:
             self.last_sound_kind == "laser_charge")
         a["jump"] = jump
         self.aim_and_fire(obs, target, mode, threats, a)
+        # Official laser charging halves movement speed. During urgent zone
+        # entry, a fresh/continued charge can keep us outside the safe circle.
+        # Default 0 exactly preserves the production decision path.
+        if (TUNE["zone_laser_mobility"] and urgent and len(me["weapons"]) > 1 and
+                me["weapons"][1] is not None and
+                me["weapons"][1].get("kind") == "laser" and "fire" in a):
+            a["fire"][1] = False
         # If hiding to regenerate, avoid dealing damage.
         if mode in ("cover", "flee") and not urgent:
             # Quiet recovery is more valuable than chip damage across an obstacle.
