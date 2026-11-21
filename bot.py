@@ -27,6 +27,7 @@ TUNE = {
     "avoid_range": 145.0,
     "laser_value": 300.0,
     "laser_search_radius": 270.0,
+    "preempt_cover_range": 0.0,
 }
 try:
     TUNE.update(json.loads(os.environ.get("MECH_TUNE", "{}") or "{}"))
@@ -378,6 +379,23 @@ class Bot:
                 retreat = (p[0] - 40 * rx, p[1] - 40 * ry)
                 if self.safety(obs, retreat):
                     return retreat, "flee", False
+        # Preemptive evasive cover only for a fresh, aimed, exposed hostile.
+        # A real obstruction must block this enemy's line to the proposed site;
+        # otherwise preserve the original loot and zone priorities.
+        if (TUNE["preempt_cover_range"] > 0 and self.map is not None and
+                hp >= 0.78 and t - self.last_hit > 6):
+            for tr, d, age in threats[:3]:
+                if (d > TUNE["preempt_cover_range"] or age > 1.1 or
+                        abs(wrap(face(tr["pos"], p) - tr["aim"][0])) > 0.65):
+                    continue
+                if not self.map.clear(tr["pos"][0], tr["pos"][1],
+                                      p[0], p[1], inflated=False):
+                    continue
+                cover = self.find_cover(obs, threats)
+                if (cover is not None and distance(cover, p) > 4 and
+                        not self.map.clear(tr["pos"][0], tr["pos"][1],
+                                           cover[0], cover[1], inflated=False)):
+                    return cover, "cover", False
         disadvantage = (hp < TUNE["cover_hp"] or
                         (taking_fire and hp < TUNE["hurt_cover_hp"]) or
                         (hp < 0.78 and outnumbered))
