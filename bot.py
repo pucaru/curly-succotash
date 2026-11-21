@@ -27,6 +27,7 @@ TUNE = {
     "avoid_range": 145.0,
     "laser_value": 300.0,
     "laser_search_radius": 270.0,
+    "squad_unprovoked_range": 190.0,
 }
 try:
     TUNE.update(json.loads(os.environ.get("MECH_TUNE", "{}") or "{}"))
@@ -217,6 +218,12 @@ class Bot:
                 continue
             hpfrac_enemy = tr["hp"] / max(1, tr["max_hp"])
             actively_hit = tr["id"] == self.attacker and t < self.attacker_until
+            # Avoid advertising our location to the coordinated house squad by
+            # opening fire at distant healthy enemies. Always retaliate against
+            # the recent attacker and finish already crippled threats.
+            if (not self.ffa and not actively_hit and
+                    d > TUNE["squad_unprovoked_range"] and hpfrac_enemy > 0.45):
+                continue
             if self.ffa and not actively_hit and d > 62 and hpfrac_enemy > 0.32:
                 continue
             # In practice the house squad does not fight itself, so removing an attacker matters.
