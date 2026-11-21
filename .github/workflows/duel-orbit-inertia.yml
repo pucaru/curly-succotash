@@ -6,7 +6,7 @@ on:
     paths:
       - .github/workflows/duel-orbit-inertia.yml
       - bench/one_hero_ffa.py
-      - tests/test_duel_orbit_commit.py
+      - tests/test_duel_orbit_inertia.py
       - bot.py
   workflow_dispatch:
 concurrency:
@@ -39,7 +39,7 @@ jobs:
           esac
       - name: Validate duel-orbit-inertia tests and candidate/control configuration
         run: |
-          python3 -m py_compile bot.py arena.py mechfight.py bench/one_hero_ffa.py bench/aggregate_duel_orbit_commit.py
+          python3 -m py_compile bot.py arena.py mechfight.py bench/one_hero_ffa.py bench/aggregate_duel_orbit_inertia.py
           python3 -c 'import os; from bot import TUNE; assert TUNE["duel_orbit_commit"] == int(os.environ["VALUE"])'
           python3 -m unittest discover -s tests -v
       - name: Clone reproducible independently implemented MIT simulation
@@ -87,7 +87,7 @@ jobs:
           pattern: duel-orbit-inertia-*
           path: bench-artifacts
       - name: Validate 144 paired matches and publish duel orbit inertia audit
-        run: python3 bench/aggregate_duel_orbit_commit.py
+        run: python3 bench/aggregate_duel_orbit_inertia.py
       - name: Upload audit summary
         if: always()
         uses: actions/upload-artifact@v4
