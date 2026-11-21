@@ -27,6 +27,8 @@ TUNE = {
     "avoid_range": 145.0,
     "laser_value": 300.0,
     "laser_search_radius": 270.0,
+    "panic_boost": False,
+    "escape_no_laser_charge": False,
 }
 try:
     TUNE.update(json.loads(os.environ.get("MECH_TUNE", "{}") or "{}"))
@@ -593,6 +595,12 @@ class Bot:
         # Always preserve enough energy for an emergency jet escape.
         if energy < 30:
             boost = False
+        # A short evasive sprint after taking damage; do not override zone routing.
+        if (TUNE.get("panic_boost", False) and t - self.last_hit < 1.8 and
+                me["hp"] < me["max_hp"] * 0.90 and energy > 48 and
+                dx * dx + dy * dy > 0.1 and
+                any(d < 135 and age < 2.0 for _, d, age in threats)):
+            boost = True
         return [round(dx, 5), round(dy, 5)], boost, jump
 
     def dodge(self, obs, move):
@@ -756,6 +764,11 @@ class Bot:
                     abs(wrap(me["aim"][0] - laseryaw)) < 0.20 and
                     w1.get("cooldown", 0) <= 0.12):
                 fire[1] = True
+        # Do not begin another half-speed laser charge while retreating wounded.
+        if (TUNE.get("escape_no_laser_charge", False) and
+                secondary == "laser" and mode in ("cover", "flee") and
+                me["hp"] < me["max_hp"] * 0.90):
+            fire[1] = False
         if w0 and w0["kind"] == "gun":
             if (visible and d < 220 and w0.get("cooldown", 0) <= 0.11 and
                     w0.get("ammo", 0) > 0 and
