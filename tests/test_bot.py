@@ -2,7 +2,7 @@
 import math
 import unittest
 
-from bot import Bot
+from bot import Bot, TUNE
 
 
 def make_bot():
@@ -101,6 +101,30 @@ class DecisionTests(unittest.TestCase):
                             "dist": "mid", "age": 0}]
         action = bot.act(data)
         self.assertAlmostEqual(action["aim"][0], math.pi / 2, places=3)
+
+    def test_confirmed_kill_clears_ghost_target_only_when_opted_in(self):
+        old = TUNE["kill_track_purge"]
+        try:
+            for value in (0, 1):
+                TUNE["kill_track_purge"] = value
+                bot = make_bot()
+                start = obs(t=10)
+                start["mechs"] = [{
+                    "kind": "mech", "id": 7, "pos": [50, 0, 0],
+                    "vel": [0, 0, 0], "hp": 1400, "max_hp": 1400,
+                    "aim": [math.pi, 0], "weapons": ["gun"],
+                }]
+                bot.update(start)
+                bot.last_enemy_id = 7
+                self.assertIn(7, bot.tracks)
+                after = obs(t=11)
+                after["events"] = [{"type": "kill", "target": 7}]
+                bot.update(after)
+                self.assertEqual(7 in bot.tracks, value == 0)
+                self.assertEqual(bot.last_enemy_id == 7, value == 0)
+                self.assertEqual(bot.kills, 1)
+        finally:
+            TUNE["kill_track_purge"] = old
 
     def test_detect_independent_death_early(self):
         bot = make_bot()
