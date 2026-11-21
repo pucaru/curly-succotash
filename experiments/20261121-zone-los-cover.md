@@ -17,3 +17,22 @@ Independent MIT-licensed proxy simulator at pinned commit `VivekRnx/bob-the-buil
 Report paired placement change, early FFA deaths (≤2 points), rear damage, outside-zone time and maximum latency. Reject any candidate that worsens *any* opponent/mode mean, increases early FFA deaths or zone exposure. If it passes screening, require an independent holdout of ≥64 new FFA and ≥32 squad seeds *per opponent type*, final-circle audit, native protocol and Docker conformance before any production promotion.
 
 All competitor study remains off-repository, no copied competitor code or public research material included. No official submission authorized.
+
+
+## Verified screening audit
+
+[All nine matrix cells, all 432 simulations and aggregate completed successfully](https://github.com/pucaru/curly-succotash/actions/runs/44911868217). Native, unit and [Docker conformance passed](https://github.com/pucaru/curly-succotash/actions/runs/44911868170). Maximum observed local proxy decision time 7.66ms. No official practice score or final robustness measured.
+
+The launched aggregate printed the correct numeric column sequence from `VALUES=(0,55,125)` but had column labels 55 and 0 transposed. The correctly labeled verified results are recorded below; the aggregator heading was repaired.
+
+| Opponents | Control squad | Control FFA | 55 squad | 55 FFA | 125 squad | 125 FFA |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| v1 | 0.333 | 8.292 | 0.333 | 8.208 | 0.333 | 8.208 |
+| v2 | 0.167 | 7.458 | 0.125 | 7.292 | 0.167 | 7.083 |
+| mixed | 0.375 | 8.042 | 0.333 | 8.125 | 0.542 | 8.250 |
+
+**55 rejected:** FFA changes v1 -0.083, v2 -0.167, mixed +0.083. Squad v2/mixed each -0.042; v2 outside-zone time +0.31s, rear damage +86.2.
+
+**125 rejected:** FFA changes v1 -0.083, v2 **-0.375**, mixed +0.208. Squad mixed +0.167, v1 unchanged, v2 unchanged; v2 rear damage reduces -192.6 and early FFA deaths 4→3, but these secondary benefits do not compensate for a -0.375 placement regression in the stronger FFA profile. Matched v2 FFA 6 wins/11 losses/7 ties. Mean FFA mixed rear damage increases +40.7.
+
+**Decision:** neither variant advances to fresh-seed holdout or main. An improved local cover proxy is not itself a verified placement improvement. Preserve production and existing submitted commits.
