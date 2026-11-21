@@ -1,0 +1,70 @@
+name: Independent laser-scout radius placement sweep
+on:
+  push:
+    branches:
+      - experiment/laser-scout-radius-20261121-2002
+    paths:
+      - .github/workflows/laser-scout-radius.yml
+  workflow_dispatch:
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 38
+    strategy:
+      fail-fast: false
+      matrix:
+        radius: [200, 270, 340]
+        opponent: [v1, v2, mixed]
+    env:
+      RADIUS: ${{ matrix.radius }}
+      OPP_KIND: ${{ matrix.opponent }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set independent scouting radius and opponent population
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "MECH_TUNE={\"laser_search_radius\":${RADIUS}}" >> "$GITHUB_ENV"
+          case "$OPP_KIND" in
+            v1) echo 'OPP=tools.baseline.brain_v1' >> "$GITHUB_ENV" ;;
+            v2) echo 'OPP=tools.baseline.brain_v2' >> "$GITHUB_ENV" ;;
+            mixed) echo 'OPP=tools.baseline.brain_v1,tools.baseline.brain_v1,tools.baseline.brain_v2,tools.baseline.brain_v2' >> "$GITHUB_ENV" ;;
+            *) exit 2 ;;
+          esac
+      - name: Syntax and deterministic gameplay regressions
+        run: |
+          python3 -m py_compile bot.py arena.py mechfight.py bench/one_hero_ffa.py
+          python3 -m unittest discover -s tests -v
+      - name: Pin independent MIT-licensed simulator
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/VivekRnx/bob-the-builder-2026.git "$RUNNER_TEMP/sim"
+          cd "$RUNNER_TEMP/sim"
+          git checkout --detach b76c216d8a7829e14409a42058eea93e46e9ccdb
+          cp "$GITHUB_WORKSPACE/bot.py" "$GITHUB_WORKSPACE/arena.py" .
+          cp "$GITHUB_WORKSPACE/bench/one_hero_ffa.py" tools/one_hero_ffa.py
+          printf 'from bot import Bot as Brain\n' > survivor_adapter.py
+      - name: Cooperative squad paired placement (24 fresh seeds)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/sim"
+          python3 tools/sim.py -n 24 -j 4 --seed 2101121 --mode squad \
+            --hero survivor_adapter --opp "$OPP" --diag 2>&1 | tee "$GITHUB_WORKSPACE/squad-radius.txt"
+      - name: One-hero FFA paired placement (24 fresh seeds)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/sim"
+          python3 tools/one_hero_ffa.py -n 24 -j 4 --seed 2201121 \
+            --opp "$OPP" 2>&1 | tee "$GITHUB_WORKSPACE/ffa-radius.txt"
+      - name: Preserve diagnostics and seed-level scores
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: radius-${{ matrix.radius }}-${{ matrix.opponent }}
+          path: |
+            squad-radius.txt
+            ffa-radius.txt
+          if-no-files-found: ignore
