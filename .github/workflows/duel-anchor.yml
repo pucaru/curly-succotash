@@ -1,0 +1,94 @@
+name: Independent selected-target duel steering screen
+on:
+  push:
+    branches:
+      - experiment/duel-anchor-20261122-0035
+    paths:
+      - .github/workflows/duel-anchor.yml
+  workflow_dispatch:
+concurrency:
+  group: duel-anchor-20261122-0035
+  cancel-in-progress: true
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 36
+    strategy:
+      fail-fast: false
+      matrix:
+        duel_target_tracking: [0, 1]
+        opponent: [v1, v2, mixed]
+    env:
+      VALUE: ${{ matrix.duel_target_tracking }}
+      OPP_KIND: ${{ matrix.opponent }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set candidate or control selected-target duel steering
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "MECH_TUNE={\"duel_target_tracking\":${VALUE}}" >> "$GITHUB_ENV"
+          case "$OPP_KIND" in
+            v1) echo 'OPP=tools.baseline.brain_v1' >> "$GITHUB_ENV" ;;
+            v2) echo 'OPP=tools.baseline.brain_v2' >> "$GITHUB_ENV" ;;
+            mixed) echo 'OPP=tools.baseline.brain_v1,tools.baseline.brain_v1,tools.baseline.brain_v2,tools.baseline.brain_v2' >> "$GITHUB_ENV" ;;
+            *) exit 2 ;;
+          esac
+      - name: Syntax and strategy conformance
+        run: |
+          python3 -m py_compile bot.py arena.py mechfight.py bench/one_hero_ffa.py bench/aggregate_duel_anchor.py
+          python3 -c 'import os; from bot import TUNE; assert TUNE["duel_target_tracking"] == int(os.environ["VALUE"])'
+          python3 -m unittest discover -s tests -v
+      - name: Clone reproducible independently implemented MIT simulation
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/VivekRnx/bob-the-builder-2026.git "$RUNNER_TEMP/sim"
+          cd "$RUNNER_TEMP/sim"
+          git checkout --detach b76c216d8a7829e14409a42058eea93e46e9ccdb
+          cp "$GITHUB_WORKSPACE/bot.py" "$GITHUB_WORKSPACE/arena.py" .
+          cp "$GITHUB_WORKSPACE/bench/one_hero_ffa.py" tools/one_hero_ffa.py
+          printf 'from bot import Bot as Brain\n' > survivor_adapter.py
+      - name: Cooperative squad - 12 new paired seeds
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/sim"
+          python3 tools/sim.py -n 12 -j 4 --seed 1710211 --mode squad \
+            --hero survivor_adapter --opp "$OPP" --diag 2>&1 | tee "$GITHUB_WORKSPACE/squad-duel-anchor.txt"
+      - name: One-entrant FFA - 12 new paired seeds
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/sim"
+          python3 tools/one_hero_ffa.py -n 12 -j 4 --seed 1720211 \
+            --opp "$OPP" 2>&1 | tee "$GITHUB_WORKSPACE/ffa-duel-anchor.txt"
+      - name: Preserve per-seed output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: duel-anchor-${{ matrix.duel_target_tracking }}-${{ matrix.opponent }}
+          path: |
+            squad-duel-anchor.txt
+            ffa-duel-anchor.txt
+          if-no-files-found: ignore
+  aggregate:
+    needs: compare
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download all six paired cells
+        uses: actions/download-artifact@v4
+        with:
+          pattern: duel-anchor-*
+          path: bench-artifacts
+      - name: Validate 144 paired matches and publish selected-target duel steering audit
+        run: python3 bench/aggregate_duel_anchor.py
+      - name: Upload audit summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: duel-anchor-summary
+          path: duel-anchor-results.md
+          if-no-files-found: ignore
