@@ -1,0 +1,67 @@
+name: Early cover recovery policy A/B
+on:
+  push:
+    branches:
+      - experiment/early-cover-trigger-20261121-1800
+    paths:
+      - .github/workflows/early-cover.yml
+  workflow_dispatch:
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 24
+    strategy:
+      fail-fast: false
+      matrix:
+        policy: [baseline, gradual, proactive]
+        opponent: [tools.baseline.brain_v1, tools.baseline.brain_v2]
+    env:
+      POLICY: ${{ matrix.policy }}
+      OPP: ${{ matrix.opponent }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure HP-dependent retreat thresholds
+        shell: bash
+        run: |
+          case "$POLICY" in
+            baseline) echo 'MECH_TUNE={"cover_hp":0.47,"hurt_cover_hp":0.75}' >> "$GITHUB_ENV" ;;
+            gradual) echo 'MECH_TUNE={"cover_hp":0.72,"hurt_cover_hp":0.96}' >> "$GITHUB_ENV" ;;
+            proactive) echo 'MECH_TUNE={"cover_hp":0.90,"hurt_cover_hp":0.995}' >> "$GITHUB_ENV" ;;
+            *) exit 2 ;;
+          esac
+      - name: Validate current production behavior unchanged
+        run: |
+          python3 -m py_compile bot.py arena.py mechfight.py
+          python3 -m unittest discover -s tests -v
+      - name: Acquire independent fixed-revision simulator
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/VivekRnx/bob-the-builder-2026.git "$RUNNER_TEMP/sim"
+          cd "$RUNNER_TEMP/sim"
+          git checkout --detach b76c216d8a7829e14409a42058eea93e46e9ccdb
+          cp "$GITHUB_WORKSPACE/bot.py" "$GITHUB_WORKSPACE/arena.py" .
+          printf 'from bot import Bot as Brain\n' > survivor_adapter.py
+      - name: Practice squad - 24 new paired seeds
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/sim"
+          python3 tools/sim.py -n 24 -j 4 --seed 230621 --mode squad \
+            --hero survivor_adapter --opp "$OPP" --diag 2>&1 | tee "$GITHUB_WORKSPACE/squad-cover.txt"
+      - name: FFA - 12 new paired seeds
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/sim"
+          python3 tools/sim.py -n 12 -j 4 --seed 440621 --mode ffa \
+            --hero survivor_adapter --opp "$OPP" --diag 2>&1 | tee "$GITHUB_WORKSPACE/ffa-cover.txt"
+      - name: Save raw placement data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: early-cover-${{ matrix.policy }}-${{ matrix.opponent }}
+          path: |
+            squad-cover.txt
+            ffa-cover.txt
+          if-no-files-found: ignore
