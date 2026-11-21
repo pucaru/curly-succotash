@@ -27,6 +27,7 @@ TUNE = {
     "avoid_range": 145.0,
     "laser_value": 300.0,
     "laser_search_radius": 270.0,
+    "kill_track_purge": 1,  # 0 baseline, 1 forget a mech after confirmed kill
 }
 try:
     TUNE.update(json.loads(os.environ.get("MECH_TUNE", "{}") or "{}"))
@@ -128,6 +129,13 @@ class Bot:
                 self.last_shot = t
             elif typ == "kill":
                 kills_now += 1
+                if TUNE["kill_track_purge"] and ev.get("target") is not None:
+                    # Kill events are authoritative. Otherwise this same
+                    # target can be reselected from stale vision for 5.2s.
+                    dead_id = ev["target"]
+                    self.tracks.pop(dead_id, None)
+                    if dead_id == self.last_enemy_id:
+                        self.last_enemy_id = None
             elif typ in ("took", "take_failed"):
                 self.loot.pop(ev.get("id"), None)
                 if typ == "take_failed" and ev.get("reason") in ("gone", "have"):
