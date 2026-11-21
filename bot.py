@@ -309,6 +309,7 @@ class Bot:
             return self.cover
         best = None
         bestcost = float("inf")
+        bestcovered = 0
         # Prefer cover close enough to reach before another laser volley.
         for radius in (8, 16, 25, 37):
             for i in range(16):
@@ -333,8 +334,9 @@ class Bot:
                         danger += (20 - dist) * 4
                 cost = radius * 1.1 + danger - covered * 19
                 if cost < bestcost:
-                    bestcost, best = cost, (px, py)
+                    bestcost, best, bestcovered = cost, (px, py), covered
         if best is not None:
+            self.cover_is_real = bestcovered > 0
             self.cover = best
             self.cover_until = t + 0.75
         return best
@@ -809,8 +811,11 @@ class Bot:
         a["jump"] = jump
         self.aim_and_fire(obs, target, mode, threats, a)
         # If hiding to regenerate, avoid dealing damage.
-        if mode in ("cover", "flee") and not urgent:
-            # Quiet recovery is more valuable than chip damage across an obstacle.
+        if (mode in ("cover", "flee") and not urgent and
+                not (TUNE.get("cover_fire_gate", 0) and mode == "cover" and
+                     not getattr(self, "cover_is_real", True))):
+            # Real LOS cover permits recovery; in the open, do not forfeit
+            # an otherwise legal offensive action while moving toward cover.
             if target is None or (distance(p, target["pos"]) > 65 and
                                   me["hp"] < me["max_hp"] * 0.72):
                 a["fire"] = [False, False]
