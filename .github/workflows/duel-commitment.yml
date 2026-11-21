@@ -1,0 +1,67 @@
+name: Duel commitment threshold holdout
+on:
+  push:
+    branches:
+      - experiment/duel-commitment-20261121-1740
+    paths:
+      - .github/workflows/duel-commitment.yml
+  workflow_dispatch:
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        policy: [baseline, short-range, avoid-duel]
+        opponent: [tools.baseline.brain_v1, tools.baseline.brain_v2]
+    env:
+      POLICY: ${{ matrix.policy }}
+      OPP: ${{ matrix.opponent }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set isolated tuning variant
+        shell: bash
+        run: |
+          case "$POLICY" in
+            baseline) echo 'MECH_TUNE={}' >> "$GITHUB_ENV" ;;
+            short-range) echo 'MECH_TUNE={"duel_range":60}' >> "$GITHUB_ENV" ;;
+            avoid-duel) echo 'MECH_TUNE={"duel_hp":1.01}' >> "$GITHUB_ENV" ;;
+            *) exit 2 ;;
+          esac
+      - name: Validate source
+        run: |
+          python3 -m py_compile bot.py arena.py mechfight.py
+          python3 -m unittest discover -s tests -v
+      - name: Set up pinned independent MIT match simulator
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/VivekRnx/bob-the-builder-2026.git "$RUNNER_TEMP/sim"
+          cd "$RUNNER_TEMP/sim"
+          git checkout --detach b76c216d8a7829e14409a42058eea93e46e9ccdb
+          cp "$GITHUB_WORKSPACE/bot.py" "$GITHUB_WORKSPACE/arena.py" .
+          printf 'from bot import Bot as Brain\n' > survivor_adapter.py
+      - name: Cooperative hunters, 20 paired novel seeds
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/sim"
+          python3 tools/sim.py -n 20 -j 4 --seed 411221 --mode squad \
+            --hero survivor_adapter --opp "$OPP" --diag 2>&1 | tee "$GITHUB_WORKSPACE/squad-results.txt"
+      - name: Free-for-all, 10 paired novel seeds
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/sim"
+          python3 tools/sim.py -n 10 -j 4 --seed 851221 --mode ffa \
+            --hero survivor_adapter --opp "$OPP" --diag 2>&1 | tee "$GITHUB_WORKSPACE/ffa-results.txt"
+      - name: Archive scoreboard and deaths
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: duel-${{ matrix.policy }}-${{ matrix.opponent }}
+          path: |
+            squad-results.txt
+            ffa-results.txt
+          if-no-files-found: ignore
