@@ -2,7 +2,7 @@
 import math
 import unittest
 
-from bot import Bot
+from bot import Bot, TUNE
 
 
 def make_bot():
@@ -101,6 +101,32 @@ class DecisionTests(unittest.TestCase):
                             "dist": "mid", "age": 0}]
         action = bot.act(data)
         self.assertAlmostEqual(action["aim"][0], math.pi / 2, places=3)
+
+    def test_prefers_currently_exposed_enemy_over_occluded_target(self):
+        class WalledMap:
+            def clear(self, x0, y0, x1, y1, inflated=False):
+                return y1 > 10
+        initial = obs(t=22)
+        initial["mechs"] = [
+            {"id": 7, "kind": "mech", "pos": [75, 0, 0],
+             "vel": [0, 0, 0], "hp": 1100, "max_hp": 1400,
+             "aim": [math.pi, 0], "weapons": ["gun"]},
+            {"id": 9, "kind": "mech", "pos": [79, 30, 0],
+             "vel": [0, 0, 0], "hp": 1300, "max_hp": 1400,
+             "aim": [math.pi, 0], "weapons": ["gun"]},
+        ]
+        prev = TUNE["visible_target_switch"]
+        try:
+            for flag, expected in ((0, 7), (1, 9)):
+                TUNE["visible_target_switch"] = flag
+                bot = make_bot()
+                bot.map = WalledMap()
+                bot.update(initial)
+                bot.last_enemy_id = 7
+                threats = bot.threats(initial["self"]["pos"], initial["t"])
+                self.assertEqual(bot.enemy(initial, threats)["id"], expected)
+        finally:
+            TUNE["visible_target_switch"] = prev
 
     def test_detect_independent_death_early(self):
         bot = make_bot()
