@@ -460,7 +460,7 @@ class Bot:
         if self.prev_pos is not None:
             moved = distance(p, self.prev_pos)
             moving = mode != "duel" and distance(p, goal) > 13
-            if moving and moved < 0.35 and t - self.last_time > 0:
+            if moving and moved < 0.35:
                 self.stuck += 1
             else:
                 self.stuck = max(0, self.stuck - 2)
@@ -705,4 +705,5 @@ class Bot:
         return a
 
 
-mf.run(Bot)
+if __name__ == "__main__":
+    mf.run(Bot)
