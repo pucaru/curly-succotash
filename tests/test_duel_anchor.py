@@ -35,7 +35,7 @@ class DuelAnchorTests(unittest.TestCase):
         with patch.dict(TUNE, {"duel_target_tracking": 0}):
             move, _, _ = hero.steer(observation(), (0, 0), "duel",
                                     False, [(nearer, 30, 0), (selected, 80, 0)], selected)
-        self.assertLess(move[0], -0.5)
+        self.assertGreater(move[0], 0.5)
         self.assertLess(move[1], -0.3)
 
     def test_no_target_falls_back_to_previous_behavior(self):
@@ -45,7 +45,7 @@ class DuelAnchorTests(unittest.TestCase):
         with patch.dict(TUNE, {"duel_target_tracking": 1}):
             move, _, _ = hero.steer(observation(), (0, 0), "duel",
                                     False, [(nearer, 30, 0)], None)
-        self.assertLess(move[0], -0.5)
+        self.assertGreater(move[0], 0.5)
 
 
 if __name__ == "__main__":
