@@ -1,6 +1,8 @@
 """Placement-oriented Mech Royale bot. Uses only the official protocol and Python stdlib."""
 import math
 import random
+import json
+import os
 
 import mechfight as mf
 from arena import Arena, Navigator
@@ -12,6 +14,22 @@ UPGRADES = ("plating", "armor", "nanites", "laser_damage", "gun_rate",
             "lightning_efficiency", "mortar_reload", "servos", "reactor",
             "capacitor", "gun_mag", "sensors", "jets")
 DEFENSE_RADIUS = 180.0
+# Tunable constants allow reproducible A/B runs in the local simulator.
+# Production uses the defaults; no network or model inference is required.
+TUNE = {
+    "focus": 120.0,
+    "attacker": 180.0,
+    "finish": 110.0,
+    "cover_hp": 0.47,
+    "hurt_cover_hp": 0.75,
+    "duel_range": 140.0,
+    "duel_hp": 0.44,
+    "avoid_range": 145.0,
+}
+try:
+    TUNE.update(json.loads(os.environ.get("MECH_TUNE", "{}") or "{}"))
+except (TypeError, ValueError):
+    pass
 
 
 def distance(a, b):
@@ -171,11 +189,11 @@ class Bot:
             # In practice the house squad does not fight itself, so removing an attacker matters.
             score = d * 0.42 + tr["hp"] * 0.045 + age * 16
             if actively_hit:
-                score -= 84
-            if tr["id"] == self.last_enemy_id:
-                score -= 33
-            if hpfrac_enemy < 0.3:
-                score -= 60
+                score -= TUNE["attacker"]
+            if tr["id"] == self.last_enemy_id and age < 1.75:
+                score -= TUNE["focus"]
+            if hpfrac_enemy < 0.46:
+                score -= TUNE["finish"] * (1.0 - hpfrac_enemy)
             if hpfrac < 0.3 and not actively_hit and d > 30:
                 score += 140
             candidates.append((score, tr, d))
@@ -310,7 +328,9 @@ class Bot:
             return (z["next_center"][0], z["next_center"][1]), "zone", True
         taking_fire = t - self.last_hit < 7.5
         outnumbered = close >= 2 and nearest < 110
-        disadvantage = hp < 0.43 or (hp < 0.68 and outnumbered)
+        disadvantage = (hp < TUNE["cover_hp"] or
+                        (taking_fire and hp < TUNE["hurt_cover_hp"]) or
+                        (hp < 0.78 and outnumbered))
         if target is None and self.ffa and nearest < 90 and close:
             disadvantage = True
         if (disadvantage or (taking_fire and outnumbered and hp < 0.85)):
@@ -327,7 +347,8 @@ class Bot:
         weapons = [w["kind"] if w else None for w in me["weapons"]]
         have_laser = "laser" in weapons
         have_secondary = weapons[1] is not None
-        local_threat = nearest < 110 and (not self.ffa or nearest < 150)
+        local_threat = nearest < TUNE["avoid_range"] and (
+            not self.ffa or nearest < 160)
         choices = []
         for ident, (pck, seen) in self.loot.items():
             if ident in self.bad_pickups:
@@ -403,9 +424,9 @@ class Bot:
             d = distance(p, target["pos"])
             hp_enemy = target["hp"] / max(1, target["max_hp"])
             # Fight one hunter when safe; retreat if it can draw other squad members.
-            if d < 100 and hp > 0.5 and close < 2:
+            if d < TUNE["duel_range"] and hp > TUNE["duel_hp"] and close < 2:
                 return (p[0], p[1]), "duel", False
-            if d > 115 and d < 200 and hp > 0.7 and hp_enemy < 0.35 and close < 2:
+            if d > 115 and d < 200 and hp > 0.60 and hp_enemy < 0.42 and close < 2:
                 return (target["pos"][0], target["pos"][1]), "finish", False
         return center, "hold", False
 
@@ -695,8 +716,11 @@ class Bot:
         a["jump"] = jump
         self.aim_and_fire(obs, target, mode, threats, a)
         # If hiding to regenerate, avoid dealing damage.
-        if mode in ("cover", "flee") and not urgent and target is None:
-            a["fire"] = [False, False]
+        if mode in ("cover", "flee") and not urgent:
+            # Quiet recovery is more valuable than chip damage across an obstacle.
+            if target is None or (distance(p, target["pos"]) > 65 and
+                                  me["hp"] < me["max_hp"] * 0.72):
+                a["fire"] = [False, False]
         if obs["tick"] % 12 == 0:
             mf.draw.label("%s | HP %.0f | cubes %d | %s" %
                           (mode, me["hp"], me["cubes"],
