@@ -27,6 +27,7 @@ TUNE = {
     "avoid_range": 145.0,
     "laser_value": 300.0,
     "laser_search_radius": 270.0,
+    "boost_reserve": 30.0,  # experimental minimum energy for boosting
 }
 try:
     TUNE.update(json.loads(os.environ.get("MECH_TUNE", "{}") or "{}"))
@@ -579,19 +580,19 @@ class Bot:
         boost = (urgent or mode in ("cover", "flee", "finish") or
                  (mode == "zone" and distance(p, goal) > 38) or
                  (mode == "weapon" and me["weapons"][1] is None and
-                  distance(p, goal) > 15)) and energy > 28
+                  distance(p, goal) > 15)) and energy > TUNE["boost_reserve"] - 2
         jump = False
         if t < self.unstuck_until:
             dx, dy = math.cos(self.unstuck_yaw), math.sin(self.unstuck_yaw)
             jump = me.get("grounded", True)
-            boost = energy > 17
+            boost = energy > TUNE["boost_reserve"] - 13
         if distance(p, goal) < 6 and mode not in ("flee", "duel", "cover"):
             dx, dy, boost = 0.0, 0.0, False
         if mode == "hold" and distance(p, goal) < 19 and not urgent:
             dx, dy = 0.0, 0.0
             boost = False
         # Always preserve enough energy for an emergency jet escape.
-        if energy < 30:
+        if energy < TUNE["boost_reserve"]:
             boost = False
         return [round(dx, 5), round(dy, 5)], boost, jump
 
