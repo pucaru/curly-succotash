@@ -27,6 +27,7 @@ TUNE = {
     "avoid_range": 145.0,
     "laser_value": 300.0,
     "laser_search_radius": 270.0,
+    "duel_stall_recovery": 1,  # 0 exact baseline, 1 detect stalled duel strafes
 }
 try:
     TUNE.update(json.loads(os.environ.get("MECH_TUNE", "{}") or "{}"))
@@ -566,7 +567,9 @@ class Bot:
             _, dx, dy = max(alternatives)
         if self.prev_pos is not None:
             moved = distance(p, self.prev_pos)
-            moving = mode != "duel" and distance(p, goal) > 13
+            moving = ((mode != "duel" and distance(p, goal) > 13) or
+                      (mode == "duel" and TUNE["duel_stall_recovery"] and
+                       math.hypot(dx, dy) > 0.7))
             if moving and moved < 0.35:
                 self.stuck += 1
             else:
