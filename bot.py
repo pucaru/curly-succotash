@@ -27,6 +27,7 @@ TUNE = {
     "avoid_range": 145.0,
     "laser_value": 300.0,
     "laser_search_radius": 270.0,
+    "crate_target_height": 4.5,
 }
 try:
     TUNE.update(json.loads(os.environ.get("MECH_TUNE", "{}") or "{}"))
@@ -692,8 +693,11 @@ class Bot:
                 action["aim"] = [wrap(me["aim"][0] + 0.32), 0.0]
             return
         ep = active["pos"]
-        center_z = 4.5 if active.get("kind", "mech") == "mech" else (
-            1.75 if active.get("kind") == "npc" else 1.4)
+        # The crate observation has no kind field; it must not be mistaken
+        # for a 9 m-tall mech when selecting the gun's impact height.
+        kind = active.get("kind", "crate")
+        center_z = (4.5 if kind == "mech" else 1.75 if kind == "npc"
+                    else TUNE["crate_target_height"])
         scale = 1.0 + 0.05 * active.get("cubes", 0)
         cent = [ep[0], ep[1], ep[2] + center_z * scale]
         d = distance(p, ep)
