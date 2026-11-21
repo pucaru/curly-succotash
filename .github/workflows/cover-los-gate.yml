@@ -5,6 +5,7 @@ on:
       - experiment/cover-los-gate-20261122-0530
     paths:
       - .github/workflows/cover-los-gate.yml
+      - bench/one_hero_ffa.py
       - tests/test_cover_los_gate.py
       - bot.py
   workflow_dispatch:
