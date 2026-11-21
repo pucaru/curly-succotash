@@ -94,6 +94,14 @@ class DecisionTests(unittest.TestCase):
         self.assertEqual(mode, "weapon")
         self.assertGreater(goal[0], 130)
 
+    def test_aim_toward_recent_gun_sound(self):
+        bot = make_bot()
+        data = obs(t=6)
+        data["sounds"] = [{"kind": "gun", "bearing": math.pi / 2,
+                            "dist": "mid", "age": 0}]
+        action = bot.act(data)
+        self.assertAlmostEqual(action["aim"][0], math.pi / 2, places=3)
+
     def test_detect_independent_death_early(self):
         bot = make_bot()
         first = obs(t=4)
