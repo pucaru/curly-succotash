@@ -27,6 +27,7 @@ TUNE = {
     "avoid_range": 145.0,
     "laser_value": 300.0,
     "laser_search_radius": 270.0,
+    "sound_steer_scale": 1.0,
 }
 try:
     TUNE.update(json.loads(os.environ.get("MECH_TUNE", "{}") or "{}"))
@@ -546,8 +547,8 @@ class Bot:
                 amount = (205 - estimated) / 205 * (1 - age / 4)
                 if self.ffa:
                     amount *= 0.55
-                ax += ux * amount * 0.9
-                ay += uy * amount * 0.9
+                ax += ux * amount * 0.9 * TUNE["sound_steer_scale"]
+                ay += uy * amount * 0.9 * TUNE["sound_steer_scale"]
             if t - self.last_hit < 6 and self.last_bearing is not None:
                 ax -= math.cos(self.last_bearing) * 0.9
                 ay -= math.sin(self.last_bearing) * 0.9
