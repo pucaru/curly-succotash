@@ -24,3 +24,16 @@ Four fully completed matrix cells (`0/60 × v1/mixed`) were independently extrac
 | mixed | +0.156 (7/3/22) | 6.234→6.797 | +0.563 (16/10/38) | 11→8 | −147.3 | **+0.181 s** |
 
 Paired 4,000-resample percentile bootstrap 95% mean-delta confidence intervals: v1 squad [+0.000,+0.281], v1 FFA [−0.703,+0.344], mixed squad [−0.063,+0.375], mixed FFA [−0.063,+1.266]. Intervals include zero in most groups; no evidence of a reliable FFA gain. The v1 FFA mean and early-death count fail the directional gate, while mixed zone exposure increases. Results are from the independent approximation, not the official 48-match scorer. Do not alter production. The remaining v2 cells are still running; once finished, verify the full aggregate, bootstrap confidence intervals, and record final outcomes. The larger holdout reverses the earlier small-screen v1 FFA gain (+0.333), demonstrating the screening instability. No official submission.
+
+## Final 576-game holdout (21 November 2026, completed)
+**Completed CI:** [holdout run 44913277052](https://github.com/pucaru/curly-succotash/actions/runs/44913277052), all six compare cells and aggregate **success**. [Native 300-observation + Docker conformance 44913276997](https://github.com/pucaru/curly-succotash/actions/runs/44913276997) **success**. The CI aggregate independently checked all six matched cells (32 squad and 64 one-hero FFA seeds each) with 4,000-resample paired bootstrap CIs.
+
+| Opponents | Squad 0→60 | FFA 0→60 | Squad Δ (95% CI; W/L/T) | FFA Δ (95% CI; W/L/T) | FFA low placements ≤2 | Rear damage Δ | Outside-zone time Δ |
+| --- | ---: | ---: | --- | --- | ---: | ---: | ---: |
+| v1 | 0.219→0.344 | 7.484→7.312 | +0.125 [+0.000,+0.281]; 5/1/26 | **−0.172 [−0.703,+0.359]**; 8/13/43 | **5→7** | −49.9 | −0.01s |
+| v2 | 0.094→0.094 | 5.578→5.250 | +0.000 [−0.125,+0.156]; 1/2/29 | **−0.328 [−1.141,+0.500]**; 20/20/24 | **15→17** | −56.7 | **+0.23s** |
+| mixed | 0.562→0.719 | 6.234→6.797 | +0.156 [−0.062,+0.375]; 7/3/22 | +0.562 [−0.047,+1.250]; 16/10/38 | 11→8 | −147.3 | **+0.18s** |
+
+CI output archived in [quiet60-holdout-summary artifact](https://github.com/pucaru/curly-succotash/actions/runs/44913277052/artifacts/14710923996). Observed peak action latency 8.21ms in the approximation; no claim about private match execution time.
+
+**Final decision: REJECT.** The v1/v2 FFA placement losses, increased v1/v2 early low placements, and increased v2/mixed zone exposure each violate independent preregistered safety gates. The mixed FFA uplift is insufficient and not statistically established at the paired 95% level; do not select by population after looking at outcomes. Preserve main 60b5438, leave official practice score unknown, and do not re-run this unchanged mechanism.
