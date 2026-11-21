@@ -1,4 +1,4 @@
-name: Independent local match benchmark
+name: Independent local match benchmark, target-focus version
 on:
   push:
     paths:
@@ -17,12 +17,12 @@ jobs:
           git clone --depth=1 https://github.com/VivekRnx/bob-the-builder-2026.git "$RUNNER_TEMP/bob-sim"
           cp bot.py arena.py "$RUNNER_TEMP/bob-sim/"
           printf 'from bot import Bot as Brain\n' > "$RUNNER_TEMP/bob-sim/survivor_adapter.py"
-      - name: Squad practice approximation (4 new seeds)
+      - name: Squad practice approximation (8 seeds)
         shell: bash
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP/bob-sim"
-          python3 tools/sim.py -n 4 -j 2 --seed 8191 --mode squad --hero survivor_adapter \
+          python3 tools/sim.py -n 8 -j 4 --seed 8191 --mode squad --hero survivor_adapter \
             --opp tools.baseline.brain_v1 --diag 2>&1 | tee "$GITHUB_WORKSPACE/squad-results.txt"
       - name: Independent FFA approximation (2 seeds, eight copies per lobby)
         shell: bash
