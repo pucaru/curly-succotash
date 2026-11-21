@@ -2,7 +2,7 @@
 import math
 import unittest
 
-from bot import Bot
+from bot import Bot, TUNE
 
 
 def make_bot():
@@ -101,6 +101,39 @@ class DecisionTests(unittest.TestCase):
                             "dist": "mid", "age": 0}]
         action = bot.act(data)
         self.assertAlmostEqual(action["aim"][0], math.pi / 2, places=3)
+
+    def test_blocked_duel_finds_safe_lane_but_control_keeps_duel(self):
+        class MockWall:
+            def free(self, x, y):
+                return True
+
+            def clear(self, x0, y0, x1, y1, inflated=True):
+                # The direct eastward shot is blocked by a wall. Side lanes
+                # have clear shooting and traversable segments.
+                return abs(y0) > 1 or abs(y1) > 1
+
+        data = obs(t=15)
+        data["mechs"] = [{
+            "kind": "mech", "id": 7, "pos": [80, 0, 0],
+            "vel": [0, 0, 0], "hp": 1400, "max_hp": 1400,
+            "aim": [math.pi, 0], "weapons": ["gun"],
+        }]
+        original = TUNE["blocked_duel"]
+        try:
+            for variant, expected in ((0, "duel"), (1, "lane"), (2, "lane")):
+                TUNE["blocked_duel"] = variant
+                bot = make_bot()
+                bot.map = MockWall()
+                bot.update(data)
+                enemy = bot.enemy(data, bot.threats(data["self"]["pos"], data["t"]))
+                goal, mode, urgent = bot.choose_goal(
+                    data, bot.threats(data["self"]["pos"], data["t"]), enemy)
+                self.assertEqual(mode, expected)
+                if variant:
+                    self.assertGreater(abs(goal[1]), 1.0)
+                    self.assertTrue(bot.map.clear(*goal, 80, 0, inflated=False))
+        finally:
+            TUNE["blocked_duel"] = original
 
     def test_detect_independent_death_early(self):
         bot = make_bot()
