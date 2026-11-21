@@ -27,6 +27,7 @@ TUNE = {
     "avoid_range": 145.0,
     "laser_value": 300.0,
     "laser_search_radius": 270.0,
+    "lightning_spacing": 0,
 }
 try:
     TUNE.update(json.loads(os.environ.get("MECH_TUNE", "{}") or "{}"))
@@ -489,6 +490,20 @@ class Bot:
                     self.scout_goal = tuple(place)
                     self.scout_until = t + 9
                 return place, mode, False
+        # Test-only policy: keep a ranged firing lane when a recent, armed
+        # lightning opponent is inside its close-range threat envelope.
+        # No change to baseline behavior unless lightning_spacing=1.
+        if target is not None and TUNE["lightning_spacing"]:
+            td = distance(p, target["pos"])
+            if (t - target["seen"] < 2.0 and td < 58 and hp > 0.25 and
+                    "lightning" in target.get("weapons", ())):
+                rx, ry = unit(p[0] - target["pos"][0],
+                              p[1] - target["pos"][1])
+                for extension in (34.0, 23.0, 14.0):
+                    retreat = (p[0] + rx * extension, p[1] + ry * extension)
+                    if self.safety(obs, retreat, 7) and (
+                            self.map is None or self.map.free(*retreat)):
+                        return retreat, "spacing", False
         if target is not None and not self.ffa:
             d = distance(p, target["pos"])
             hp_enemy = target["hp"] / max(1, target["max_hp"])
@@ -577,6 +592,9 @@ class Bot:
                 self.stuck = 0
         self.prev_pos = p[:]
         boost = (urgent or mode in ("cover", "flee", "finish") or
+                 (mode == "spacing" and energy > 58 and
+                  any(d < 47 and a < 2 and "lightning" in tr.get("weapons", ())
+                      for tr, d, a in threats)) or
                  (mode == "zone" and distance(p, goal) > 38) or
                  (mode == "weapon" and me["weapons"][1] is None and
                   distance(p, goal) > 15)) and energy > 28

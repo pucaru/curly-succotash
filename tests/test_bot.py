@@ -2,7 +2,7 @@
 import math
 import unittest
 
-from bot import Bot
+from bot import Bot, TUNE
 
 
 def make_bot():
@@ -110,6 +110,70 @@ class DecisionTests(unittest.TestCase):
         second["alive"] = 15
         bot.act(second)
         self.assertTrue(bot.ffa)
+
+class LightningSpacingTests(unittest.TestCase):
+    def _enemy_obs(self, lightning=True, at=33):
+        data = obs(t=5)
+        data["mechs"] = [{"id": 7, "kind": "mech",
+                          "pos": [at, 0, 0], "vel": [0, 0, 0],
+                          "hp": 1400, "max_hp": 1400,
+                          "weapons": ["gun", "lightning"] if lightning else ["gun"],
+                          "aim": [math.pi, 0], "charging": False}]
+        return data
+
+    def test_spacing_only_for_actual_recent_lightning_enemy(self):
+        orig = TUNE["lightning_spacing"]
+        try:
+            TUNE["lightning_spacing"] = 0
+            baseline_bot = make_bot()
+            b = self._enemy_obs()
+            baseline_bot.update(b)
+            goal0, mode0, _ = baseline_bot.choose_goal(
+                b, baseline_bot.threats(b["self"]["pos"], b["t"]),
+                baseline_bot.enemy(b, baseline_bot.threats(b["self"]["pos"], b["t"])))
+            self.assertEqual(mode0, "duel")
+            TUNE["lightning_spacing"] = 1
+            other_bot = make_bot()
+            other_bot.update(b)
+            ts = other_bot.threats(b["self"]["pos"], b["t"])
+            goal1, mode1, _ = other_bot.choose_goal(b, ts, other_bot.enemy(b, ts))
+            self.assertEqual(mode1, "spacing")
+            self.assertLess(goal1[0], 0)
+            self.assertNotEqual(goal0, goal1)
+            normal_bot = make_bot()
+            normal = self._enemy_obs(lightning=False)
+            normal_bot.update(normal)
+            tn = normal_bot.threats(normal["self"]["pos"], normal["t"])
+            _, mn, _ = normal_bot.choose_goal(normal, tn, normal_bot.enemy(normal, tn))
+            self.assertEqual(mn, "duel")
+        finally:
+            TUNE["lightning_spacing"] = orig
+
+    def test_spacing_cannot_retreat_outside_zone(self):
+        orig = TUNE["lightning_spacing"]
+        try:
+            TUNE["lightning_spacing"] = 1
+            b = self._enemy_obs(at=515)
+            b["self"]["pos"] = [545.0, 0, 0]
+            bot = make_bot()
+            bot.update(b)
+            ts = bot.threats(b["self"]["pos"], b["t"])
+            goal, mode, urgent = bot.choose_goal(b, ts, bot.enemy(b, ts))
+            self.assertNotEqual(mode, "spacing")
+        finally:
+            TUNE["lightning_spacing"] = orig
+
+    def test_lightning_spacing_preserves_offense(self):
+        orig = TUNE["lightning_spacing"]
+        try:
+            TUNE["lightning_spacing"] = 1
+            data = self._enemy_obs()
+            action = make_bot().act(data)
+            self.assertGreater(action["aim"][0], -0.2)
+            self.assertGreater(action["move"][0], -1.01)
+            self.assertLess(action["move"][0], 0)
+        finally:
+            TUNE["lightning_spacing"] = orig
 
 
 if __name__ == "__main__":
