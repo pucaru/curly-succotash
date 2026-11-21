@@ -34,6 +34,7 @@ TUNE = {
     "jet_escape": False,
     "squad_aggressive": False,
     "farm_hunt": False,
+    "ffa_focus": False,
 }
 try:
     TUNE.update(json.loads(os.environ.get("MECH_TUNE", "{}") or "{}"))
@@ -71,6 +72,8 @@ class Bot:
 
     def __init__(self, hello):
         self.cfg = hello["config"]
+        self.tune = dict(TUNE)
+        self.ffa_tuned = False
         self.slot = hello["slot"]
         self.rng = random.Random(hello.get("seed", 0))
         self.map = None
@@ -146,6 +149,17 @@ class Bot:
         if ((t < 50 and self.other_deaths >= 1) or
                 (t >= 50 and self.other_deaths >= 2)):
             self.ffa = True
+        if self.ffa and self.tune["ffa_focus"] and not self.ffa_tuned:
+            # Use the stronger FFA engagement profile without changing the
+            # cooperative squad policy. Keep parameters local to this Bot:
+            # multiple bots may run in the same local simulator process.
+            self.tune.update({
+                "focus": 260.0, "attacker": 310.0, "finish": 180.0,
+                "duel_hp": 0.25, "duel_range": 200.0,
+                "cover_hp": 0.24, "hurt_cover_hp": 0.40,
+                "combat_boost": True,
+            })
+            self.ffa_tuned = True
         for ent in obs.get("mechs", []):
             if ent.get("kind") != "mech":
                 continue
@@ -229,11 +243,11 @@ class Bot:
             # In practice the house squad does not fight itself, so removing an attacker matters.
             score = d * 0.42 + tr["hp"] * 0.045 + age * 16
             if actively_hit:
-                score -= TUNE["attacker"]
+                score -= self.tune["attacker"]
             if tr["id"] == self.last_enemy_id and age < 1.75:
-                score -= TUNE["focus"]
+                score -= self.tune["focus"]
             if hpfrac_enemy < 0.46:
-                score -= TUNE["finish"] * (1.0 - hpfrac_enemy)
+                score -= self.tune["finish"] * (1.0 - hpfrac_enemy)
             if hpfrac < 0.3 and not actively_hit and d > 30:
                 score += 140
             candidates.append((score, tr, d))
@@ -252,7 +266,7 @@ class Bot:
         r = z["next_radius"]
         # The final phase's radius approaches zero, so track the moving centre tightly.
         if r <= 35:
-            if TUNE["zone_safe"] and self.map is not None and not self.map.free(xc, yc):
+            if self.tune["zone_safe"] and self.map is not None and not self.map.free(xc, yc):
                 idx = self.map.nearest(xc, yc)
                 if idx >= 0:
                     return self.map.pos(idx)
@@ -369,7 +383,7 @@ class Bot:
                    need / max(3, speed * 0.7) + 10 > timeleft) or
                   (t > z["shrink_start"] and dnext > rnext - 7))
         if urgent:
-            goal = center if TUNE["zone_safe"] else (z["next_center"][0], z["next_center"][1])
+            goal = center if self.tune["zone_safe"] else (z["next_center"][0], z["next_center"][1])
             return goal, "zone", True
         taking_fire = t - self.last_hit < 7.5
         outnumbered = close >= 2 and nearest < 110
@@ -378,7 +392,7 @@ class Bot:
                             (t - self.last_sound_time < 1.7 and
                              self.last_sound_kind == "laser_charge")))
         if (unseen_incoming and hp < 0.92 and
-                not (TUNE["squad_aggressive"] and not self.ffa)):
+                not (self.tune["squad_aggressive"] and not self.ffa)):
             bearing = (self.last_bearing if t - self.last_hit < 6
                        else self.last_sound_yaw)
             if bearing is not None:
@@ -391,12 +405,12 @@ class Bot:
                 retreat = (p[0] - 40 * rx, p[1] - 40 * ry)
                 if self.safety(obs, retreat):
                     return retreat, "flee", False
-        if TUNE["squad_aggressive"] and not self.ffa and target is not None:
+        if self.tune["squad_aggressive"] and not self.ffa and target is not None:
             if distance(p, target["pos"]) > 170:
                 return (target["pos"][0], target["pos"][1]), "finish", False
             return (p[0], p[1]), "duel", False
-        disadvantage = (hp < TUNE["cover_hp"] or
-                        (taking_fire and hp < TUNE["hurt_cover_hp"]) or
+        disadvantage = (hp < self.tune["cover_hp"] or
+                        (taking_fire and hp < self.tune["hurt_cover_hp"]) or
                         (hp < 0.78 and outnumbered))
         if target is None and self.ffa and nearest < 90 and close:
             disadvantage = True
@@ -414,7 +428,7 @@ class Bot:
         weapons = [w["kind"] if w else None for w in me["weapons"]]
         have_laser = "laser" in weapons
         have_secondary = weapons[1] is not None
-        local_threat = nearest < TUNE["avoid_range"] and (
+        local_threat = nearest < self.tune["avoid_range"] and (
             not self.ffa or nearest < 160)
         if (t - self.last_sound_time < 2.2 and
                 any(q["band"] == "near" and t - q["seen"] < 2
@@ -429,7 +443,7 @@ class Bot:
                 continue
             d = distance(p, pck["pos"])
             if (abs(p[2] - pck["pos"][2]) > 4.5 or
-                    d > (TUNE["laser_search_radius"] if kind == "laser" else 145)): 
+                    d > (self.tune["laser_search_radius"] if kind == "laser" else 145)): 
                 continue
             if not self.safety(obs, pck["pos"], 7):
                 continue
@@ -440,7 +454,7 @@ class Bot:
                     kind != "laser" or hp < 0.72 or
                     t - self.last_hit < 4.5 or nearest < 70):
                 continue
-            value = {"laser": TUNE["laser_value"],
+            value = {"laser": self.tune["laser_value"],
                      "lightning": 145, "mortar": 95}.get(kind, 0)
             if have_secondary:
                 value -= 115
@@ -472,7 +486,7 @@ class Bot:
                     continue
                 val = 230 + (me["max_hp"] - me["hp"]) * 0.10 - d * 1.0
                 choices.append((val, drop["pos"][:2], "drop"))
-        if TUNE["farm_hunt"] and not local_threat and hp > 0.64:
+        if self.tune["farm_hunt"] and not local_threat and hp > 0.64:
             for crate in obs.get("crates", []):
                 d = distance(p, crate["pos"])
                 if d > 125 or not self.safety(obs, crate["pos"], 7):
@@ -527,7 +541,7 @@ class Bot:
             d = distance(p, target["pos"])
             hp_enemy = target["hp"] / max(1, target["max_hp"])
             # Fight one hunter when safe; retreat if it can draw other squad members.
-            if d < TUNE["duel_range"] and hp > TUNE["duel_hp"] and close < 2:
+            if d < self.tune["duel_range"] and hp > self.tune["duel_hp"] and close < 2:
                 return (p[0], p[1]), "duel", False
             if d > 115 and d < 200 and hp > 0.60 and hp_enemy < 0.42 and close < 2:
                 return (target["pos"][0], target["pos"][1]), "finish", False
@@ -541,7 +555,7 @@ class Bot:
             tr, d, _ = threats[0]
             vx, vy = unit(x - tr["pos"][0], y - tr["pos"][1])
             sideways = (-vy * self.strafe_dir, vx * self.strafe_dir)
-            desire = 52 if any(w and w["kind"] == "lightning" for w in me["weapons"]) else TUNE["duel_desire"]
+            desire = 52 if any(w and w["kind"] == "lightning" for w in me["weapons"]) else self.tune["duel_desire"]
             if d > desire + 14:
                 dx, dy = -vx * 0.4 + sideways[0] * 0.9, -vy * 0.4 + sideways[1] * 0.9
             elif d < desire - 19:
@@ -615,10 +629,10 @@ class Bot:
                  (mode == "weapon" and me["weapons"][1] is None and
                   distance(p, goal) > 15)) and energy > 28
         jump = False
-        if TUNE["combat_boost"] and mode == "duel" and threats and energy > 50:
+        if self.tune["combat_boost"] and mode == "duel" and threats and energy > 50:
             if (t - self.last_hit < 6 or threats[0][1] < 110) and t % 2.4 < 0.75:
                 boost = True
-        if (TUNE["jet_escape"] and mode in ("cover", "flee") and threats and
+        if (self.tune["jet_escape"] and mode in ("cover", "flee") and threats and
                 t - self.last_hit < 3.2 and energy > 58):
             jump = me.get("grounded", True)
             boost = True
@@ -725,7 +739,7 @@ class Bot:
             if candidates:
                 active = min(candidates, key=lambda c: c[0])[1]
         if active is None:
-            if TUNE["idle_reload"] and w0 and w0.get("kind") == "gun":
+            if self.tune["idle_reload"] and w0 and w0.get("kind") == "gun":
                 if (w0.get("ammo", 0) <= w0.get("stats", {}).get("mag", 12) * 0.6 and
                         w0.get("reload", 0) <= 0):
                     action["reload"] = True
