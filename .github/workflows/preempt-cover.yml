@@ -27,7 +27,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo "MECH_TUNE={\"preempt_cover_until\":${VALUE}}" >> "$GITHUB_ENV"
+          echo "MECH_TUNE={\"preempt_cover_range\":${VALUE}}" >> "$GITHUB_ENV"
           case "$OPP_KIND" in
             v1) echo 'OPP=tools.baseline.brain_v1' >> "$GITHUB_ENV" ;;
             v2) echo 'OPP=tools.baseline.brain_v2' >> "$GITHUB_ENV" ;;
