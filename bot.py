@@ -27,6 +27,7 @@ TUNE = {
     "avoid_range": 145.0,
     "laser_value": 300.0,
     "laser_search_radius": 270.0,
+    "laser_release_margin": 0.10,
 }
 try:
     TUNE.update(json.loads(os.environ.get("MECH_TUNE", "{}") or "{}"))
@@ -743,7 +744,7 @@ class Bot:
             if d < 275 and (visible or charge > 0.2):
                 if charge <= 0.001:
                     fire[1] = w1.get("cooldown", 0) <= 0.11
-                elif charge < charge_s - 0.10 or not aligned:
+                elif charge < charge_s - TUNE["laser_release_margin"] or not aligned:
                     fire[1] = True
                 else:
                     # Releasing a charged laser is a separate action from charging.
