@@ -15,3 +15,25 @@ Pinned independent MIT proxy simulator `VivekRnx/bob-the-builder-2026@b76c216d8a
 Require 300-observation native and Docker sandbox conformance, nonnegative paired mean placement and no rise in placements ≤2 for every subgroup, plus no average FFA increase in rear damage or out-of-zone time. Summarize bootstrap 95% CI, W/L/T, low-finishes, and latency. If any safety or subgroup regression, reject without holdout. Otherwise holdout new seeds ≥64 one-bot FFA + ≥32 squad **per opponent group**, endgame and conformance audit before any possible production proposal.
 
 No production change, official submission, Git history rewrite, or public-competitor research/code.
+
+## Completed 144-game audit — 2026-11-22
+
+**REJECTED; no holdout, main change, or official entry.** [Complete independent 144-game screen and aggregate 44931745749](https://github.com/pucaru/curly-succotash/actions/runs/44931745749) passed; [300-observation native + Docker conformance 44931745630](https://github.com/pucaru/curly-succotash/actions/runs/44931745630) passed at evaluated code `e5f4db7e2d101284bd96594afa9e712dc4e93e17`. The proxy is not the official 48-match practice scorer.
+
+| Opponent | Squad control→exposed | FFA control→exposed | Paired FFA delta [bootstrap 95% CI], W/L/T | FFA rear delta | FFA zone delta |
+| --- | --- | --- | --- | ---: | ---: |
+| v1 | 0.167→0.083 | 9.167→9.000 | -0.167 [-0.500,+0.000], 0/1/11 | +8.2 | +0.000s |
+| v2 | 0.250→0.167 | 7.083→6.833 | **-0.250 [-1.750,+0.917]**, 4/3/5 | **+422.4** | **+0.150s** |
+| mixed | 0.333→0.583 | 8.167→8.333 | +0.167 [-1.083,+1.583], 2/3/7 | +35.5 | +0.000s |
+
+Squad paired deltas with CI and W/L/T: v1 -0.083 [-0.250,0], 0/1/11; v2 -0.083 [-0.333,+0.167], 1/2/9; mixed +0.250 [-0.250,+1.000], 1/1/10. Low-placement counts (≤2 points): squads v1 12→12, v2 12→12, mixed 12→11; FFAs v1 0→0, v2 2→3, mixed 1→1. Peak independent proxy decision latency 39.48ms (below 50ms but an undesirable margin, not authoritative Docker latency).
+
+**Additional squad diagnostics** from 12 fresh match records per group:
+
+| Population | Early death <60s, control→candidate | Mean death time | Mean rear damage | Mean stuck time | Out-zone time |
+| --- | --- | --- | --- | --- | --- |
+| v1 | 6→6 | 63.25→63.02s | 74.9→266.6 | 0.55→0.52s | 0→0s |
+| v2 | 6→5 | 70.70→65.10s | 402.1→245.3 | 2.42→2.42s | 0→0s |
+| mixed | 6→4 | 73.61→85.68s | 448.7→331.6 | 1.67→1.74s | 0→0s |
+
+The mixed squad improvement is neither broad nor sufficient: v1/v2 squad regress, v2 FFA incurs substantial extra rear damage and zone exposure. Even choosing a geometrically shootable enemy does not ensure a safer duel. Do not rerun exactly this hypothesis without a new mechanism, and do not confuse local FFA mean >6 with official 6 target. Production remains unchanged.
