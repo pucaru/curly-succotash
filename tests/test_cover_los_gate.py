@@ -8,7 +8,7 @@ class FakeMap:
         self.blocks_attackers = blocks_attackers
     def free(self, x, y):
         return True
-    def clear(self, x0, y0, x1, y1):
+    def clear(self, x0, y0, x1, y1, inflated=True):
         # Hero -> nearby waypoint is navigable. Threat -> waypoint is
         # either universally exposed or protected by a hard barrier.
         if abs(x0) < 0.001 and abs(y0) < 0.001:
