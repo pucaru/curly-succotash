@@ -1,6 +1,6 @@
 # Laser loot value — controlled paired placement experiment (21 November 2026)
 
-**Status: initial 432-match benchmark started; not for submission or promotion.**
+**Status: 432-match benchmark completed, 9/9 comparisons and aggregation successful. Both experimental values rejected; main unchanged.**
 
 Production main is still `60b5438af4d45af989f63bffcbe0b03250a23ae4`. This new branch is based exactly on that production commit and does not touch submitted history.
 
