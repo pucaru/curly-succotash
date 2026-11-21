@@ -331,6 +331,10 @@ class Bot:
                         covered += 1
                     if dist < 20:
                         danger += (20 - dist) * 4
+                # An exposed waypoint is not cover: do not trade offense and
+                # regeneration for a location that blocks no hostile sightline.
+                if TUNE.get("cover_los_gate", 0) and covered == 0:
+                    continue
                 cost = radius * 1.1 + danger - covered * 19
                 if cost < bestcost:
                     bestcost, best = cost, (px, py)
