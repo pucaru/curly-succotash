@@ -1,0 +1,64 @@
+name: Fresh target lock paired placement A/B
+on:
+  push:
+    branches:
+      - experiment/fresh-targets-20261121-1740
+    paths:
+      - bot.py
+      - tests/test_fresh_targets.py
+      - .github/workflows/fresh-targets.yml
+  workflow_dispatch:
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 24
+    strategy:
+      fail-fast: false
+      matrix:
+        memory: [5.2, 1.2, 0.3]
+        opponent: [tools.baseline.brain_v1, tools.baseline.brain_v2]
+    env:
+      MEMORY_S: ${{ matrix.memory }}
+      OPP: ${{ matrix.opponent }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure target memory policy
+        shell: bash
+        run: |
+          echo "MECH_TUNE={\"target_memory_s\":${MEMORY_S}}" >> "$GITHUB_ENV"
+      - name: Syntax and regression checks
+        run: |
+          python3 -m py_compile bot.py arena.py mechfight.py
+          python3 -m unittest discover -s tests -v
+      - name: Fetch independently developed pinned MIT simulator
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/VivekRnx/bob-the-builder-2026.git "$RUNNER_TEMP/sim"
+          cd "$RUNNER_TEMP/sim"
+          git checkout --detach b76c216d8a7829e14409a42058eea93e46e9ccdb
+          cp "$GITHUB_WORKSPACE/bot.py" "$GITHUB_WORKSPACE/arena.py" .
+          printf 'from bot import Bot as Brain\n' > survivor_adapter.py
+      - name: Practice-squad approximation - 16 paired new seeds
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/sim"
+          python3 tools/sim.py -n 16 -j 4 --seed 421121 --mode squad \
+            --hero survivor_adapter --opp "$OPP" --diag 2>&1 | tee "$GITHUB_WORKSPACE/squad-results.txt"
+      - name: FFA approximation - 8 paired new seeds
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/sim"
+          python3 tools/sim.py -n 8 -j 4 --seed 881121 --mode ffa \
+            --hero survivor_adapter --opp "$OPP" --diag 2>&1 | tee "$GITHUB_WORKSPACE/ffa-results.txt"
+      - name: Preserve all simulator outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fresh-targets-${{ matrix.memory }}-${{ matrix.opponent }}
+          path: |
+            squad-results.txt
+            ffa-results.txt
+          if-no-files-found: ignore
