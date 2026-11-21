@@ -1,0 +1,51 @@
+name: Candidate duel orbit inertia conformance
+on:
+  push:
+    branches:
+      - experiment/duel-orbit-inertia-20261122-0730
+    paths:
+      - .github/workflows/duel-orbit-inertia-check.yml
+      - bot.py
+      - tests/test_duel_orbit_inertia.py
+  workflow_dispatch:
+jobs:
+  bot-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python syntax
+        run: python3 -m py_compile bot.py arena.py mechfight.py
+      - name: Unit tests
+        run: python3 -m unittest discover -s tests -v
+      - name: Download and unpack official starter kit
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p "$RUNNER_TEMP/mechkit"
+          curl --retry 3 --fail --location --silent --show-error \
+            "https://www.joinbuilders.org/buildathon/tracks/builders/files/mechfight-kit.tar.gz" \
+            -o "$RUNNER_TEMP/kit.tar.gz"
+          tar -xzf "$RUNNER_TEMP/kit.tar.gz" -C "$RUNNER_TEMP/mechkit"
+          find "$RUNNER_TEMP/mechkit" -type f -name check.py
+      - name: Test native protocol on 300 observations
+        shell: bash
+        run: |
+          set -euo pipefail
+          CHECK=$(find "$RUNNER_TEMP/mechkit" -type f -path '*/check/check.py' -print -quit)
+          ARENA=$(find "$RUNNER_TEMP/mechkit" -type d -name arena -print -quit)
+          test -n "$CHECK" && test -n "$ARENA"
+          MECH_TUNE='{"duel_orbit_commit":1}' python3 "$CHECK" --map-dir "$ARENA" -- python3 -u bot.py
+      - name: Build Docker image
+        run: docker build --platform linux/amd64 -t curly-mech .
+      - name: Docker sandbox conformance
+        shell: bash
+        run: |
+          set -euo pipefail
+          CHECK=$(find "$RUNNER_TEMP/mechkit" -type f -path '*/check/check.py' -print -quit)
+          ARENA=$(find "$RUNNER_TEMP/mechkit" -type d -name arena -print -quit)
+          python3 "$CHECK" --map-dir /arena -- \
+            docker run --platform linux/amd64 --rm -i --network none --cpus 1 \
+              --memory 512m --read-only --tmpfs /tmp:rw,size=64m \
+              --user 65534:65534 -e MECH_TUNE='{"duel_orbit_commit":1}' \
+              -v "$ARENA:/arena:ro" curly-mech
