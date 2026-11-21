@@ -27,6 +27,7 @@ TUNE = {
     "avoid_range": 145.0,
     "laser_value": 300.0,
     "laser_search_radius": 270.0,
+    "zone_ring_fraction": 0.52,
 }
 try:
     TUNE.update(json.loads(os.environ.get("MECH_TUNE", "{}") or "{}"))
@@ -250,7 +251,7 @@ class Bot:
             if distance(self.hold, (xc, yc)) < r * 0.72:
                 return self.hold
         # Sample a ring of reachable sites instead of always walking into the same centre.
-        radius = min(r * 0.52, 88.0)
+        radius = min(r * TUNE["zone_ring_fraction"], 88.0)
         best, bestscore = (xc, yc), float("-inf")
         candidates = [(xc, yc)]
         for dist in (radius, radius * 0.55):
