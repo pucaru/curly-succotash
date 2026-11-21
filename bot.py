@@ -27,6 +27,7 @@ TUNE = {
     "avoid_range": 145.0,
     "laser_value": 300.0,
     "laser_search_radius": 270.0,
+    "defensive_facing_range": 0.0,
 }
 try:
     TUNE.update(json.loads(os.environ.get("MECH_TUNE", "{}") or "{}"))
@@ -686,6 +687,10 @@ class Bot:
         if active is None:
             if self.last_bearing is not None and obs["t"] - self.last_hit < 8.0:
                 action["aim"] = [self.last_bearing, 0.0]
+            elif (threats and threats[0][1] < TUNE["defensive_facing_range"]
+                  and threats[0][2] < 2.2):
+                # Keep the near hunter in the protected front arc during FFA disengagement.
+                action["aim"] = [face(p, threats[0][0]["pos"]), 0.0]
             elif self.last_sound_yaw is not None and obs["t"] - self.last_sound_time < 4:
                 action["aim"] = [self.last_sound_yaw, 0.0]
             else:
