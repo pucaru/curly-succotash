@@ -27,6 +27,7 @@ TUNE = {
     "avoid_range": 145.0,
     "laser_value": 300.0,
     "laser_search_radius": 270.0,
+    "ffa_hold_evasion_radius": 0.0,
 }
 try:
     TUNE.update(json.loads(os.environ.get("MECH_TUNE", "{}") or "{}"))
@@ -585,9 +586,20 @@ class Bot:
             dx, dy = math.cos(self.unstuck_yaw), math.sin(self.unstuck_yaw)
             jump = me.get("grounded", True)
             boost = energy > 17
-        if distance(p, goal) < 6 and mode not in ("flee", "duel", "cover"):
+        # The safe-zone holding point must not suppress evasive repulsion
+        # immediately after damage or when a nearby threat is tracked.
+        evasive_hold = (self.ffa and mode == "hold" and
+                        TUNE["ffa_hold_evasion_radius"] > 0 and
+                        ((t - self.last_hit < 5.0 and self.last_bearing is not None) or
+                         any(d < TUNE["ffa_hold_evasion_radius"] and age < 3.0
+                             for _, d, age in threats) or
+                         (t - self.last_sound_time < 2.0 and
+                          any(q["band"] == "near" and t - q["seen"] < 2.0
+                              for q in self.sound_contacts))))
+        if (distance(p, goal) < 6 and mode not in ("flee", "duel", "cover")
+                and not evasive_hold):
             dx, dy, boost = 0.0, 0.0, False
-        if mode == "hold" and distance(p, goal) < 19 and not urgent:
+        if mode == "hold" and distance(p, goal) < 19 and not urgent and not evasive_hold:
             dx, dy = 0.0, 0.0
             boost = False
         # Always preserve enough energy for an emergency jet escape.
