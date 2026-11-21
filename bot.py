@@ -27,6 +27,7 @@ TUNE = {
     "avoid_range": 145.0,
     "laser_value": 300.0,
     "laser_search_radius": 270.0,
+    "zone_los_penalty": 0.0,
 }
 try:
     TUNE.update(json.loads(os.environ.get("MECH_TUNE", "{}") or "{}"))
@@ -259,6 +260,9 @@ class Bot:
                 candidates.append((xc + dist * math.cos(a),
                                    yc + dist * math.sin(a)))
         dangers = self.threats(p, t, 330)
+        # Evaluate direct threat visibility, rather than relying solely on the
+        # static near-wall proxy. Restrict raycasts to four recent threats.
+        los_weight = max(0.0, TUNE.get("zone_los_penalty", 0.0))
         for point in candidates:
             if self.map is not None and not self.map.free(*point):
                 continue
@@ -278,6 +282,15 @@ class Bot:
                 pd = distance(tr["pos"], point)
                 if pd < 160:
                     score -= (160 - pd) * (0.30 if not self.ffa else 0.75)
+            if los_weight > 0 and self.map is not None:
+                for tr, _, age in dangers[:4]:
+                    pd = distance(tr["pos"], point)
+                    if (age < 2.5 and pd < 200 and
+                            self.map.clear(tr["pos"][0], tr["pos"][1],
+                                           point[0], point[1], inflated=False)):
+                        # A line between two ground points is a conservative
+                        # proxy for direct fire, not an exact visibility query.
+                        score -= los_weight * (0.65 + 0.35 * (200 - pd) / 200)
             if score > bestscore:
                 bestscore = score
                 best = point
