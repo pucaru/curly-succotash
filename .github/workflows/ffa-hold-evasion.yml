@@ -1,0 +1,73 @@
+name: FFA-gated holding evasion independent holdout
+on:
+  push:
+    branches:
+      - experiment/ffa-hold-evasion-20261121-1810
+    paths:
+      - bot.py
+      - tests/test_ffa_hold_evasion.py
+      - bench/one_hero_ffa.py
+      - .github/workflows/ffa-hold-evasion.yml
+  workflow_dispatch:
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 26
+    strategy:
+      fail-fast: false
+      matrix:
+        radius: [0.0, 200.0]
+        opponent: [v1, v2, mixed]
+    env:
+      RADIUS: ${{ matrix.radius }}
+      OPP_KIND: ${{ matrix.opponent }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Choose exact treatment and baseline configurations
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "MECH_TUNE={\"ffa_hold_evasion_radius\":${RADIUS}}" >> "$GITHUB_ENV"
+          case "$OPP_KIND" in
+            v1) echo "OPP=tools.baseline.brain_v1" >> "$GITHUB_ENV" ;;
+            v2) echo "OPP=tools.baseline.brain_v2" >> "$GITHUB_ENV" ;;
+            mixed) echo "OPP=tools.baseline.brain_v1,tools.baseline.brain_v1,tools.baseline.brain_v2,tools.baseline.brain_v2" >> "$GITHUB_ENV" ;;
+            *) exit 2 ;;
+          esac
+      - name: Run behavior and syntax regression tests
+        run: |
+          python3 -m py_compile bot.py arena.py mechfight.py bench/one_hero_ffa.py
+          python3 -m unittest discover -s tests -v
+      - name: Fetch pinned independent MIT simulator
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/VivekRnx/bob-the-builder-2026.git "$RUNNER_TEMP/sim"
+          cd "$RUNNER_TEMP/sim"
+          git checkout --detach b76c216d8a7829e14409a42058eea93e46e9ccdb
+          cp "$GITHUB_WORKSPACE/bot.py" "$GITHUB_WORKSPACE/arena.py" .
+          cp "$GITHUB_WORKSPACE/bench/one_hero_ffa.py" tools/one_hero_ffa.py
+          printf 'from bot import Bot as Brain\n' > survivor_adapter.py
+      - name: Practice cooperative squad - 24 paired novel seeds
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/sim"
+          python3 tools/sim.py -n 24 -j 4 --seed 551231 --mode squad \
+            --hero survivor_adapter --opp "$OPP" --diag 2>&1 | tee "$GITHUB_WORKSPACE/squad-ffa-gate.txt"
+      - name: One-hero FFA - 32 paired novel seeds
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/sim"
+          python3 tools/one_hero_ffa.py -n 32 -j 4 --seed 661231 \
+            --opp "$OPP" 2>&1 | tee "$GITHUB_WORKSPACE/onehero-ffa-gate.txt"
+      - name: Archive raw diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffa-gate-${{ matrix.radius }}-${{ matrix.opponent }}
+          path: |
+            squad-ffa-gate.txt
+            onehero-ffa-gate.txt
+          if-no-files-found: ignore
