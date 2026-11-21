@@ -25,6 +25,7 @@ TUNE = {
     "duel_range": 140.0,
     "duel_hp": 0.44,
     "avoid_range": 145.0,
+    "duel_target_tracking": 1,
     "laser_value": 300.0,
     "laser_search_radius": 270.0,
 }
@@ -499,12 +500,16 @@ class Bot:
                 return (target["pos"][0], target["pos"][1]), "finish", False
         return center, "hold", False
 
-    def steer(self, obs, goal, mode, urgent, threats):
+    def steer(self, obs, goal, mode, urgent, threats, target=None):
         me, t, p = obs["self"], obs["t"], obs["self"]["pos"]
         x, y = p[:2]
         energy = me.get("energy", 0)
         if mode == "duel" and threats:
             tr, d, _ = threats[0]
+            # Track the selected combat target, not an unrelated nearer mech.
+            if TUNE["duel_target_tracking"] and target is not None:
+                tr = target
+                d = distance(p, tr["pos"])
             vx, vy = unit(x - tr["pos"][0], y - tr["pos"][1])
             sideways = (-vy * self.strafe_dir, vx * self.strafe_dir)
             desire = 52 if any(w and w["kind"] == "lightning" for w in me["weapons"]) else 75
@@ -800,7 +805,7 @@ class Bot:
                         not (current == "laser" and held[1].get("charge", 0) > .01)):
                     a["take"], a["drop"] = item["id"], 1
                     break
-        move, boost, jump = self.steer(obs, goal, mode, urgent, threats)
+        move, boost, jump = self.steer(obs, goal, mode, urgent, threats, target)
         a["move"] = self.dodge(obs, move)
         a["boost"] = boost or (
             me["energy"] > 43 and me["grounded"] and
