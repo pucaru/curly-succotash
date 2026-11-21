@@ -2,7 +2,7 @@
 import math
 import unittest
 
-from bot import Bot
+from bot import Bot, TUNE
 
 
 def make_bot():
@@ -101,6 +101,39 @@ class DecisionTests(unittest.TestCase):
                             "dist": "mid", "age": 0}]
         action = bot.act(data)
         self.assertAlmostEqual(action["aim"][0], math.pi / 2, places=3)
+
+    def test_outnumbered_hit_uses_one_bounded_aerial_escape(self):
+        data = obs(t=25)
+        data["self"]["hp"] = 900
+        data["events"] = [{"type": "damaged", "weapon": "gun",
+                           "by": 7, "amount": 45, "rear": False,
+                           "bearing": 0.0}]
+        for ident, xy in ((7, [40, 0]), (8, [-35, 27]), (9, [-30, -30])):
+            data["mechs"].append({
+                "kind": "mech", "id": ident, "pos": xy + [0],
+                "vel": [0, 0, 0], "hp": 1400, "max_hp": 1400,
+                "aim": [math.pi, 0], "weapons": ["gun"],
+            })
+        orig = TUNE["outnumbered_jet"]
+        try:
+            for flag in (0, 1):
+                TUNE["outnumbered_jet"] = flag
+                bot = make_bot()
+                action = bot.act(data)
+                self.assertEqual(action["jump"], bool(flag))
+                if flag:
+                    self.assertTrue(action["boost"])
+                    self.assertGreater(bot.escape_until, data["t"])
+                    airborne = obs(t=26)
+                    airborne["self"]["grounded"] = False
+                    airborne["self"]["hp"] = 900
+                    airborne["self"]["energy"] = 70
+                    airborne["mechs"] = data["mechs"]
+                    next_action = bot.act(airborne)
+                    self.assertTrue(next_action["boost"])
+                    self.assertFalse(next_action["jump"])
+        finally:
+            TUNE["outnumbered_jet"] = orig
 
     def test_detect_independent_death_early(self):
         bot = make_bot()
