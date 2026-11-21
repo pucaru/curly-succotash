@@ -85,6 +85,15 @@ class DecisionTests(unittest.TestCase):
         action = bot.act(data)
         self.assertGreater(action["move"][0], 0)
 
+    def test_far_laser_beats_random_scouting(self):
+        bot = make_bot()
+        data = obs(t=5)
+        data["pickups"] = [{"id": 8111, "kind": "laser", "pos": [145, 0, 0]}]
+        bot.update(data)
+        goal, mode, urgent = bot.choose_goal(data, [], None)
+        self.assertEqual(mode, "weapon")
+        self.assertGreater(goal[0], 130)
+
     def test_detect_independent_death_early(self):
         bot = make_bot()
         first = obs(t=4)
