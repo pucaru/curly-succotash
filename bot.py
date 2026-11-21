@@ -352,10 +352,14 @@ class Bot:
         speed = max(8, me["stats"].get("walk_speed", 13))
         timeleft = z["shrink_end"] - t
         need = max(0, dnext - max(4, rnext * 0.50))
+        # A/B-only parameter. The production value remains zero.
+        # A positive buffer starts long navigations before the shrinking circle
+        # makes detours and obstacle avoidance impossible.
+        rotation_buffer = max(0.0, min(55.0, float(TUNE.get("zone_rotation_buffer", 0))))
         urgent = (not me["in_zone"] or
                   dcur > z["radius"] - 8 or
-                  (t > z["shrink_start"] - 16 and
-                   need / max(3, speed * 0.7) + 10 > timeleft) or
+                  (t > z["shrink_start"] - 16 - 0.7 * rotation_buffer and
+                   need / max(3, speed * 0.7) + 10 + rotation_buffer > timeleft) or
                   (t > z["shrink_start"] and dnext > rnext - 7))
         if urgent:
             return (z["next_center"][0], z["next_center"][1]), "zone", True
