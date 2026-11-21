@@ -27,6 +27,11 @@ TUNE = {
     "avoid_range": 145.0,
     "laser_value": 300.0,
     "laser_search_radius": 270.0,
+    "duel_desire": 75.0,
+    "combat_boost": False,
+    "zone_safe": False,
+    "idle_reload": False,
+    "jet_escape": False,
 }
 try:
     TUNE.update(json.loads(os.environ.get("MECH_TUNE", "{}") or "{}"))
@@ -245,6 +250,10 @@ class Bot:
         r = z["next_radius"]
         # The final phase's radius approaches zero, so track the moving centre tightly.
         if r <= 35:
+            if TUNE["zone_safe"] and self.map is not None and not self.map.free(xc, yc):
+                idx = self.map.nearest(xc, yc)
+                if idx >= 0:
+                    return self.map.pos(idx)
             return (xc, yc)
         if self.hold is not None and t < self.hold_until:
             if distance(self.hold, (xc, yc)) < r * 0.72:
@@ -358,7 +367,8 @@ class Bot:
                    need / max(3, speed * 0.7) + 10 > timeleft) or
                   (t > z["shrink_start"] and dnext > rnext - 7))
         if urgent:
-            return (z["next_center"][0], z["next_center"][1]), "zone", True
+            goal = center if TUNE["zone_safe"] else (z["next_center"][0], z["next_center"][1])
+            return goal, "zone", True
         taking_fire = t - self.last_hit < 7.5
         outnumbered = close >= 2 and nearest < 110
         unseen_incoming = (not threats and
@@ -507,7 +517,7 @@ class Bot:
             tr, d, _ = threats[0]
             vx, vy = unit(x - tr["pos"][0], y - tr["pos"][1])
             sideways = (-vy * self.strafe_dir, vx * self.strafe_dir)
-            desire = 52 if any(w and w["kind"] == "lightning" for w in me["weapons"]) else 75
+            desire = 52 if any(w and w["kind"] == "lightning" for w in me["weapons"]) else TUNE["duel_desire"]
             if d > desire + 14:
                 dx, dy = -vx * 0.4 + sideways[0] * 0.9, -vy * 0.4 + sideways[1] * 0.9
             elif d < desire - 19:
@@ -581,6 +591,13 @@ class Bot:
                  (mode == "weapon" and me["weapons"][1] is None and
                   distance(p, goal) > 15)) and energy > 28
         jump = False
+        if TUNE["combat_boost"] and mode == "duel" and threats and energy > 50:
+            if (t - self.last_hit < 6 or threats[0][1] < 110) and t % 2.4 < 0.75:
+                boost = True
+        if (TUNE["jet_escape"] and mode in ("cover", "flee") and threats and
+                t - self.last_hit < 3.2 and energy > 58):
+            jump = me.get("grounded", True)
+            boost = True
         if t < self.unstuck_until:
             dx, dy = math.cos(self.unstuck_yaw), math.sin(self.unstuck_yaw)
             jump = me.get("grounded", True)
@@ -684,6 +701,10 @@ class Bot:
             if candidates:
                 active = min(candidates, key=lambda c: c[0])[1]
         if active is None:
+            if TUNE["idle_reload"] and w0 and w0.get("kind") == "gun":
+                if (w0.get("ammo", 0) <= w0.get("stats", {}).get("mag", 12) * 0.6 and
+                        w0.get("reload", 0) <= 0):
+                    action["reload"] = True
             if self.last_bearing is not None and obs["t"] - self.last_hit < 8.0:
                 action["aim"] = [self.last_bearing, 0.0]
             elif self.last_sound_yaw is not None and obs["t"] - self.last_sound_time < 4:
