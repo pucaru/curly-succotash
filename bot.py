@@ -27,6 +27,7 @@ TUNE = {
     "avoid_range": 145.0,
     "laser_value": 300.0,
     "laser_search_radius": 270.0,
+    "target_memory_s": 5.2,
 }
 try:
     TUNE.update(json.loads(os.environ.get("MECH_TUNE", "{}") or "{}"))
@@ -213,7 +214,7 @@ class Bot:
         hpfrac = me["hp"] / max(1, me["max_hp"])
         candidates = []
         for tr, d, age in threats:
-            if age > 5.2 or d > 190:
+            if age > TUNE["target_memory_s"] or d > 190:
                 continue
             hpfrac_enemy = tr["hp"] / max(1, tr["max_hp"])
             actively_hit = tr["id"] == self.attacker and t < self.attacker_until
