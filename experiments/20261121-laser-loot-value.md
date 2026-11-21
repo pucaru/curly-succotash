@@ -16,9 +16,21 @@ Nine jobs test three opponent populations (v1, v2, mixed) × three values. Every
 
 Workflow: [laser-loot-value.yml](../.github/workflows/laser-loot-value.yml). Machine-readable aggregator: [aggregate_laser_value.py](../bench/aggregate_laser_value.py). [Actions runs](https://github.com/pucaru/curly-succotash/actions/workflows/laser-loot-value.yml).
 
-## Results
+## Results — completed and rejected (21 November 2026)
 
-Pending all nine GitHub Actions jobs and aggregate audit. No score improvement is claimed before verified completion.
+[Final 9-job benchmark plus strict aggregate: SUCCESS](https://github.com/pucaru/curly-succotash/actions/runs/44904028607). All **432** trial placements were parsed and checked against exact seed sets. The [branch-head conformance run](https://github.com/pucaru/curly-succotash/actions/runs/44904053581) also passed.
+
+| Opponents | 180 squad | 180 FFA | 300 squad | 300 FFA | 420 squad | 420 FFA |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| v1 | 0.417 | 7.708 | 0.542 | 7.542 | 0.542 | 7.542 |
+| v2 | 0.125 | 6.375 | 0.083 | 6.458 | 0.083 | 6.750 |
+| mixed | 0.708 | 7.167 | 0.708 | 7.833 | 0.708 | 7.583 |
+
+Paired FFA deltas versus 300: value 180 changes **v1 +0.167, v2 -0.083, mixed -0.667**, increases mixed FFA early deaths from **5 to 6 of 24**, and reduces v1 squad by **0.125**. Value 420 changes **v1 +0.000, v2 +0.292, mixed -0.250**; its squad means are unchanged. Both candidates **REJECTED** under the predeclared gate. The v2 benefit of 420 is too small and not consistent across opponents, and the mixed loss demonstrates possible final-round damage. No subsequent holdout required for rejected variants.
+
+Full paired wins/losses/ties, early-death counts and per-seed logs are in the [aggregate job summary and its downloadable artifacts](https://github.com/pucaru/curly-succotash/actions/runs/44904028607).
+
+Commit record: `4947243d65d9` (single-hero evaluator), `b287b9b32e5a` (auditor), `ddce616833dd` (benchmark workflow), `515b558fb65c` (pre-registered experiment record).
 
 ## Recent completed independent rejections
 
