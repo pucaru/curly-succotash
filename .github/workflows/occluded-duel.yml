@@ -1,0 +1,94 @@
+name: Independent wall-occluded duel lane screen
+on:
+  push:
+    branches:
+      - experiment/occluded-duel-lane-20261122-0140
+    paths:
+      - .github/workflows/occluded-duel.yml
+  workflow_dispatch:
+concurrency:
+  group: occluded-duel-lane-20261122-0140
+  cancel-in-progress: true
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 36
+    strategy:
+      fail-fast: false
+      matrix:
+        blocked_duel: [0, 1, 2]
+        opponent: [v1, v2, mixed]
+    env:
+      VALUE: ${{ matrix.blocked_duel }}
+      OPP_KIND: ${{ matrix.opponent }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set candidate or control wall-occluded duel lane
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "MECH_TUNE={\"blocked_duel\":${VALUE}}" >> "$GITHUB_ENV"
+          case "$OPP_KIND" in
+            v1) echo 'OPP=tools.baseline.brain_v1' >> "$GITHUB_ENV" ;;
+            v2) echo 'OPP=tools.baseline.brain_v2' >> "$GITHUB_ENV" ;;
+            mixed) echo 'OPP=tools.baseline.brain_v1,tools.baseline.brain_v1,tools.baseline.brain_v2,tools.baseline.brain_v2' >> "$GITHUB_ENV" ;;
+            *) exit 2 ;;
+          esac
+      - name: Validate corrected occluded-duel tests and candidate/control configuration
+        run: |
+          python3 -m py_compile bot.py arena.py mechfight.py bench/one_hero_ffa.py bench/aggregate_occluded_duel.py
+          python3 -c 'import os; from bot import TUNE; assert TUNE["blocked_duel"] == int(os.environ["VALUE"])'
+          python3 -m unittest discover -s tests -v
+      - name: Clone reproducible independently implemented MIT simulation
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/VivekRnx/bob-the-builder-2026.git "$RUNNER_TEMP/sim"
+          cd "$RUNNER_TEMP/sim"
+          git checkout --detach b76c216d8a7829e14409a42058eea93e46e9ccdb
+          cp "$GITHUB_WORKSPACE/bot.py" "$GITHUB_WORKSPACE/arena.py" .
+          cp "$GITHUB_WORKSPACE/bench/one_hero_ffa.py" tools/one_hero_ffa.py
+          printf 'from bot import Bot as Brain\n' > survivor_adapter.py
+      - name: Cooperative squad - 12 new paired seeds
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/sim"
+          python3 tools/sim.py -n 12 -j 4 --seed 1810211 --mode squad \
+            --hero survivor_adapter --opp "$OPP" --diag 2>&1 | tee "$GITHUB_WORKSPACE/squad-occluded-duel.txt"
+      - name: One-entrant FFA - 12 new paired seeds
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/sim"
+          python3 tools/one_hero_ffa.py -n 12 -j 4 --seed 1820211 \
+            --opp "$OPP" 2>&1 | tee "$GITHUB_WORKSPACE/ffa-occluded-duel.txt"
+      - name: Preserve per-seed output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: occluded-duel-${{ matrix.blocked_duel }}-${{ matrix.opponent }}
+          path: |
+            squad-occluded-duel.txt
+            ffa-occluded-duel.txt
+          if-no-files-found: ignore
+  aggregate:
+    needs: compare
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download all nine paired cells
+        uses: actions/download-artifact@v4
+        with:
+          pattern: occluded-duel-*
+          path: bench-artifacts
+      - name: Validate 216 paired matches and publish wall-occluded duel lane audit
+        run: python3 bench/aggregate_occluded_duel.py
+      - name: Upload audit summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: occluded-duel-summary
+          path: occluded-duel-results.md
+          if-no-files-found: ignore
