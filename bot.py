@@ -27,6 +27,7 @@ TUNE = {
     "avoid_range": 145.0,
     "laser_value": 300.0,
     "laser_search_radius": 270.0,
+    "urgent_zone_entry_margin": 0.0,
 }
 try:
     TUNE.update(json.loads(os.environ.get("MECH_TUNE", "{}") or "{}"))
@@ -358,6 +359,18 @@ class Bot:
                    need / max(3, speed * 0.7) + 10 > timeleft) or
                   (t > z["shrink_start"] and dnext > rnext - 7))
         if urgent:
+            # In large circles, the closest point inside the *next* safe ring
+            # can require far less exposed travel than aiming for its centre.
+            # Keep final circles unchanged so this cannot sacrifice endgame.
+            entry_margin = TUNE.get("urgent_zone_entry_margin", 0.0)
+            if entry_margin > 0.0 and rnext >= 100:
+                inner_r = max(12.0, rnext - entry_margin)
+                if dnext > inner_r + 5.0:
+                    factor = inner_r / max(dnext, 0.001)
+                    entry = (z["next_center"][0] + (p[0] - z["next_center"][0]) * factor,
+                             z["next_center"][1] + (p[1] - z["next_center"][1]) * factor)
+                    if self.map is None or self.map.free(*entry):
+                        return entry, "zone", True
             return (z["next_center"][0], z["next_center"][1]), "zone", True
         taking_fire = t - self.last_hit < 7.5
         outnumbered = close >= 2 and nearest < 110
