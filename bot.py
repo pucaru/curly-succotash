@@ -27,6 +27,9 @@ TUNE = {
     "avoid_range": 145.0,
     "laser_value": 300.0,
     "laser_search_radius": 270.0,
+    # Keep HP regeneration possible after an encounter, instead of repeatedly
+    # shooting unthreatening crates/drones while critically injured.
+    "injured_farm_silence": 0,
 }
 try:
     TUNE.update(json.loads(os.environ.get("MECH_TUNE", "{}") or "{}"))
@@ -668,8 +671,10 @@ class Bot:
         active = None
         if target is not None:
             active = target
-        elif not threats and mode not in ("cover", "flee", "hold"):
-            # Only farm when unthreatened. Shooting interrupts HP regeneration.
+        elif (not threats and mode not in ("cover", "flee", "hold") and
+              not (TUNE["injured_farm_silence"] and
+                   me["hp"] < me["max_hp"] * 0.82)):
+            # Only farm when unthreatened. Firing resets the 5-second HP regen delay.
             actors = list(obs.get("crates", [])) + [
                 v for v in obs.get("mechs", []) if v.get("kind") == "npc"
             ]
