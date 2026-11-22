@@ -27,6 +27,7 @@ TUNE = {
     "avoid_range": 145.0,
     "laser_value": 300.0,
     "laser_search_radius": 270.0,
+    "idle_reload": 0,
 }
 try:
     TUNE.update(json.loads(os.environ.get("MECH_TUNE", "{}") or "{}"))
@@ -684,6 +685,19 @@ class Bot:
             if candidates:
                 active = min(candidates, key=lambda c: c[0])[1]
         if active is None:
+            # Original logic returned before checking whether a depleted gun
+            # should reload, imposing a full reload delay on the next duel.
+            if TUNE.get("idle_reload", 0) and w0 and w0.get("kind") == "gun":
+                ammo = w0.get("ammo", 0)
+                mag = max(1, w0.get("stats", {}).get("mag", 12))
+                quiet = (not threats and obs["t"] - self.last_hit > 7.0
+                         and obs["t"] - self.last_sound_time > 4.0
+                         and not any(q["band"] == "near" and
+                                     obs["t"] - q["seen"] < 4.0
+                                     for q in self.sound_contacts))
+                if w0.get("reload", 0) <= 0 and (
+                        ammo <= 0 or (quiet and ammo <= int(mag * 0.65))):
+                    action["reload"] = True
             if self.last_bearing is not None and obs["t"] - self.last_hit < 8.0:
                 action["aim"] = [self.last_bearing, 0.0]
             elif self.last_sound_yaw is not None and obs["t"] - self.last_sound_time < 4:
