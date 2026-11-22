@@ -17,6 +17,7 @@ DEFENSE_RADIUS = 180.0
 # Tunable constants allow reproducible A/B runs in the local simulator.
 # Production uses the defaults; no network or model inference is required.
 TUNE = {
+    "weapon_stall_veto": 0,
     "focus": 120.0,
     "attacker": 180.0,
     "finish": 110.0,
@@ -104,6 +105,9 @@ class Bot:
         self.target_last = -100.0
         self.scout_goal = None
         self.scout_until = -100.0
+        self.weapon_pursuit_id = None
+        self.weapon_pursuit_start = -100.0
+        self.weapon_pursuit_distance = 0.0
         self.explored = set()
         self.sound_contacts = []
         self.last_sound_yaw = None
@@ -775,6 +779,26 @@ class Bot:
         threats = self.threats(p, t)
         target = self.enemy(obs, threats)
         goal, mode, urgent = self.choose_goal(obs, threats, target)
+        # A fixed laser priority cannot justify indefinite pursuit if terrain,
+        # a vanished pickup, or path geometry prevents any actual progress.
+        # The policy below is opt-in and otherwise changes no decision.
+        if TUNE.get("weapon_stall_veto", 0):
+            if mode == "weapon":
+                ident = next((key for key, (item, _) in self.loot.items()
+                              if distance(goal, item["pos"]) < 1.0), None)
+                remaining = distance(p, goal)
+                if ident != self.weapon_pursuit_id:
+                    self.weapon_pursuit_id = ident
+                    self.weapon_pursuit_start = t
+                    self.weapon_pursuit_distance = remaining
+                elif (ident is not None and
+                      t - self.weapon_pursuit_start >= 8.0 and
+                      self.weapon_pursuit_distance - remaining < 12.0):
+                    self.bad_pickups[ident] = t + 25.0
+                    self.weapon_pursuit_id = None
+                    goal, mode = self.zone_target(obs), "hold"
+            else:
+                self.weapon_pursuit_id = None
         a = {"tick": obs["tick"]}
         if obs.get("offer"):
             choices = obs["offer"].get("choices", [])
