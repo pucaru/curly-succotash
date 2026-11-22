@@ -585,7 +585,11 @@ class Bot:
             dx, dy = math.cos(self.unstuck_yaw), math.sin(self.unstuck_yaw)
             jump = me.get("grounded", True)
             boost = energy > 17
-        if distance(p, goal) < 6 and mode not in ("flee", "duel", "cover"):
+        # Enter the actual pickup radius rather than stopping 6m away.
+        stop_dist = 6.0
+        if mode == "weapon" and TUNE.get("pickup_approach_fix", 0):
+            stop_dist = max(1.2, self.cfg.get("loot", {}).get("pickup_radius", 4.0) - 1.0)
+        if distance(p, goal) < stop_dist and mode not in ("flee", "duel", "cover"):
             dx, dy, boost = 0.0, 0.0, False
         if mode == "hold" and distance(p, goal) < 19 and not urgent:
             dx, dy = 0.0, 0.0
