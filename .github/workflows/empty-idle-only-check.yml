@@ -2,11 +2,11 @@ name: Candidate empty-magazine-only recovery conformance
 on:
   push:
     branches:
-      - experiment/empty-idle-only-20261122-1130
+      - experiment/empty-idle-only-20261122-1240
     paths:
       - .github/workflows/idle-magazine-check.yml
       - bot.py
-      - tests/test_empty_idle_reload.py
+      - tests/test_empty_idle_only.py
   workflow_dispatch:
 jobs:
   bot-check:
