@@ -27,6 +27,7 @@ TUNE = {
     "avoid_range": 145.0,
     "laser_value": 300.0,
     "laser_search_radius": 270.0,
+    "safe_loot_arrival": 0,
 }
 try:
     TUNE.update(json.loads(os.environ.get("MECH_TUNE", "{}") or "{}"))
@@ -585,7 +586,34 @@ class Bot:
             dx, dy = math.cos(self.unstuck_yaw), math.sin(self.unstuck_yaw)
             jump = me.get("grounded", True)
             boost = energy > 17
-        if distance(p, goal) < 6 and mode not in ("flee", "duel", "cover"):
+        stop_radius = 6.0
+        if (TUNE.get("safe_loot_arrival", 0) and
+                mode in ("weapon", "cube") and not urgent):
+            # The standard 6m arrival radius is larger than the game's
+            # collection range. Close the last few metres only for a live,
+            # uncontested pickup with a safe route back into the circle.
+            reach = (self.cfg.get("loot", {}).get("pickup_radius", 4.0)
+                     if mode == "weapon" else
+                     self.cfg.get("cubes", {}).get("pickup_radius", 3.5))
+            records = self.loot if mode == "weapon" else self.cube_memory
+            fresh = any((t - seen < 1.25 and
+                         distance(goal, item["pos"]) < 1.0)
+                        for item, seen in records.values())
+            danger = any(d < 155 and age < 4.5 for _, d, age in threats)
+            recent_sound = (t - self.last_sound_time < 3.0 and
+                            self.last_sound_kind in
+                            ("gun", "mortar", "laser", "laser_charge", "lightning"))
+            z = obs["zone"]
+            in_circle = (distance(goal, z["center"]) <
+                         z["radius"] - 20.0)
+            next_safe = (z["shrink_start"] - t > 35.0 or
+                         distance(goal, z["next_center"]) <
+                         z["next_radius"] - 20.0)
+            if (fresh and not danger and not recent_sound and
+                    t - self.last_hit > 8.0 and me["in_zone"] and
+                    in_circle and next_safe):
+                stop_radius = max(1.1, reach - 0.75)
+        if distance(p, goal) < stop_radius and mode not in ("flee", "duel", "cover"):
             dx, dy, boost = 0.0, 0.0, False
         if mode == "hold" and distance(p, goal) < 19 and not urgent:
             dx, dy = 0.0, 0.0
