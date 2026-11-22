@@ -2,7 +2,7 @@ name: Candidate rear impact evasion conformance
 on:
   push:
     branches:
-      - experiment/rear-impact-evasion-20261122-0730
+      - experiment/rear-impact-evasion-20261122-0915
     paths:
       - .github/workflows/rear-impact-evasion-check.yml
       - bot.py
