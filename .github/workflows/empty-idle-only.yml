@@ -2,15 +2,15 @@ name: Independent empty-magazine-only recovery screen
 on:
   push:
     branches:
-      - experiment/empty-idle-only-20261122-1130
+      - experiment/empty-idle-only-20261122-1240
     paths:
       - .github/workflows/empty-idle-only.yml
       - bench/one_hero_ffa.py
-      - tests/test_empty_idle_reload.py
+      - tests/test_empty_idle_only.py
       - bot.py
   workflow_dispatch:
 concurrency:
-  group: empty-idle-only-20261122-1130
+  group: empty-idle-only-20261122-1240
   cancel-in-progress: true
 jobs:
   compare:
@@ -39,7 +39,7 @@ jobs:
           esac
       - name: Validate empty-idle-only tests and candidate/control configuration
         run: |
-          python3 -m py_compile bot.py arena.py mechfight.py bench/one_hero_ffa.py bench/aggregate_empty_idle_reload.py
+          python3 -m py_compile bot.py arena.py mechfight.py bench/one_hero_ffa.py bench/aggregate_empty_idle_only.py
           python3 -c 'import os; from bot import TUNE; assert TUNE["empty_idle_reload"] == int(os.environ["VALUE"])'
           python3 -m unittest discover -s tests -v
       - name: Clone reproducible independently implemented MIT simulation
@@ -87,7 +87,7 @@ jobs:
           pattern: empty-idle-only-*
           path: bench-artifacts
       - name: Validate 144 paired matches and publish empty-magazine-only recovery audit
-        run: python3 bench/aggregate_empty_idle_reload.py
+        run: python3 bench/aggregate_empty_idle_only.py
       - name: Upload audit summary
         if: always()
         uses: actions/upload-artifact@v4
