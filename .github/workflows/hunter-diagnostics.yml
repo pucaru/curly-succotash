@@ -1,0 +1,46 @@
+name: Baseline squad damage conversion diagnostics
+on:
+  push:
+    branches:
+      - analysis/hunter-damage-conversion-20261122-0845
+    paths:
+      - .github/workflows/hunter-diagnostics.yml
+      - bench/hunter_damage_conversion.py
+  workflow_dispatch:
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        opponent: [v1, v2, mixed]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare pinned independent MIT simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone https://github.com/VivekRnx/bob-the-builder-2026.git "$RUNNER_TEMP/sim"
+          cd "$RUNNER_TEMP/sim"
+          git checkout --detach b76c216d8a7829e14409a42058eea93e46e9ccdb
+          cp "$GITHUB_WORKSPACE/bot.py" "$GITHUB_WORKSPACE/arena.py" .
+          cp "$GITHUB_WORKSPACE/bench/hunter_damage_conversion.py" diagnostic_adapter.py
+      - name: Per-target baseline damage diagnostic - six seeds
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${{ matrix.opponent }}" in
+            v1) OPP='tools.baseline.brain_v1' ;;
+            v2) OPP='tools.baseline.brain_v2' ;;
+            mixed) OPP='tools.baseline.brain_v1,tools.baseline.brain_v1,tools.baseline.brain_v2,tools.baseline.brain_v2' ;;
+            *) exit 2 ;;
+          esac
+          cd "$RUNNER_TEMP/sim"
+          python3 diagnostic_adapter.py --opp "$OPP" --seed 3672001 -n 6 | tee "$GITHUB_WORKSPACE/diagnostic-${{ matrix.opponent }}.jsonl"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: baseline-hunter-diagnostics-${{ matrix.opponent }}
+          path: diagnostic-${{ matrix.opponent }}.jsonl
+          if-no-files-found: ignore
