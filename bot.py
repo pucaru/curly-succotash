@@ -372,7 +372,8 @@ class Bot:
         if (TUNE.get("rear_impact_evade", 0) and target is not None and
                 self.last_rear_bearing is not None and
                 t - self.last_rear_hit < 1.5 and
-                self.last_rear_by != target["id"] and hp < 0.90):
+                self.last_rear_by != target["id"] and
+                TUNE["hurt_cover_hp"] <= hp < 0.90):
             best, bestscore = None, float("-inf")
             for side in (-1, 1):
                 yaw = self.last_rear_bearing + side * math.pi / 2

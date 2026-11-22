@@ -4,7 +4,7 @@
 
 ## Mechanism and counterfactual
 
-Prior lightning spacing and long duel strafing harmed rear-hit safety. Production receives actual `damaged` event fields `rear`, `by`, `bearing`, but discards the rear flag. It continues duelling its frontal selected target even when a *different* shooter just landed a 1.5×-multiplier rear hit. Candidate `MECH_TUNE={"rear_impact_evade":1}` triggers for 1.5 seconds following a distinct rear hit below 90% HP, selects a reachable zone-safe lateral waypoint taking account of other hunters and available line-of-sight barriers, briefly boosts, and **retains fire on the target**. Flag 0 has unchanged decisions. This is impact-triggered positional intervention, not the previously rejected simple lightning distance-retreat or fixed orbit timing.
+Prior lightning spacing and long duel strafing harmed rear-hit safety. Production receives actual `damaged` event fields `rear`, `by`, `bearing`, but discards the rear flag. It continues duelling its frontal selected target even when a *different* shooter just landed a 1.5×-multiplier rear hit. Candidate `MECH_TUNE={"rear_impact_evade":1}` triggers for 1.5 seconds following a distinct rear hit between 75% and 90% HP (without overriding pre-existing critical-health cover/flee logic), selects a reachable zone-safe lateral waypoint taking account of other hunters and available line-of-sight barriers, briefly boosts, and **retains fire on the target**. Flag 0 has unchanged decisions. This is impact-triggered positional intervention, not the previously rejected simple lightning distance-retreat or fixed orbit timing.
 
 ## Preregistered tests
 

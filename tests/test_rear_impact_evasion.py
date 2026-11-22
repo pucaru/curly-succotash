@@ -9,7 +9,7 @@ class RearImpactTests(unittest.TestCase):
     def scenario(self, rear=True, source=9):
         bot = make_bot()
         data = obs(t=10)
-        data["self"]["hp"] = 840
+        data["self"]["hp"] = 1120
         data["mechs"] = [{
             "kind": "mech", "id": 7, "pos": [40, 0, 0],
             "vel": [0, 0, 0], "hp": 1100, "max_hp": 1400,
