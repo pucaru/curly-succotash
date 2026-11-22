@@ -17,6 +17,7 @@ DEFENSE_RADIUS = 180.0
 # Tunable constants allow reproducible A/B runs in the local simulator.
 # Production uses the defaults; no network or model inference is required.
 TUNE = {
+    "rear_impact_evade": 0,
     "focus": 120.0,
     "attacker": 180.0,
     "finish": 110.0,
@@ -83,6 +84,9 @@ class Bot:
         self.last_bearing = None
         self.attacker = None
         self.attacker_until = -100.0
+        self.last_rear_hit = -100.0
+        self.last_rear_bearing = None
+        self.last_rear_by = None
         self.last_visible_mech = -100.0
         self.prev_alive = int(self.cfg.get("match", {}).get("mechs", 16))
         self.kills = 0
@@ -119,6 +123,10 @@ class Bot:
             typ = ev.get("type")
             if typ == "damaged":
                 self.last_hit = t
+                if ev.get("rear") and ev.get("bearing") is not None:
+                    self.last_rear_hit = t
+                    self.last_rear_bearing = ev["bearing"]
+                    self.last_rear_by = ev.get("by")
                 if ev.get("bearing") is not None:
                     self.last_bearing = ev["bearing"]
                 if ev.get("by") is not None:
@@ -359,6 +367,37 @@ class Bot:
                   (t > z["shrink_start"] and dnext > rnext - 7))
         if urgent:
             return (z["next_center"][0], z["next_center"][1]), "zone", True
+        # Short, actual rear-hit response while preserving offensive fire.
+        # No side effect when experiment toggle is disabled (production).
+        if (TUNE.get("rear_impact_evade", 0) and target is not None and
+                self.last_rear_bearing is not None and
+                t - self.last_rear_hit < 1.5 and
+                self.last_rear_by != target["id"] and hp < 0.90):
+            best, bestscore = None, float("-inf")
+            for side in (-1, 1):
+                yaw = self.last_rear_bearing + side * math.pi / 2
+                for stride in (26.0, 38.0):
+                    site = (p[0] + math.cos(yaw) * stride,
+                            p[1] + math.sin(yaw) * stride)
+                    if not self.safety(obs, site, 8):
+                        continue
+                    if self.map is not None and (
+                            not self.map.free(*site) or
+                            not self.map.clear(p[0], p[1], *site)):
+                        continue
+                    threat_cost = sum(
+                        max(0, 120 - distance(site, tr["pos"])) * 0.65
+                        for tr, _, age in threats if age < 3)
+                    score = distance(site, target["pos"]) * 0.22 - threat_cost
+                    rear = self.tracks.get(self.last_rear_by)
+                    if (rear is not None and self.map is not None and
+                            not self.map.clear(rear["pos"][0], rear["pos"][1],
+                                               *site, inflated=False)):
+                        score += 55.0
+                    if score > bestscore:
+                        best, bestscore = site, score
+            if best is not None:
+                return best, "rear_evade", False
         taking_fire = t - self.last_hit < 7.5
         outnumbered = close >= 2 and nearest < 110
         unseen_incoming = (not threats and
@@ -576,7 +615,7 @@ class Bot:
                 self.unstuck_yaw = math.atan2(dy, dx) + self.rng.choice((-1.0, 1.0))
                 self.stuck = 0
         self.prev_pos = p[:]
-        boost = (urgent or mode in ("cover", "flee", "finish") or
+        boost = (urgent or mode in ("cover", "flee", "finish", "rear_evade") or
                  (mode == "zone" and distance(p, goal) > 38) or
                  (mode == "weapon" and me["weapons"][1] is None and
                   distance(p, goal) > 15)) and energy > 28
