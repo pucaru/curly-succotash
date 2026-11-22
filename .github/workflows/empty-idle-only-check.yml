@@ -4,7 +4,7 @@ on:
     branches:
       - experiment/empty-idle-only-20261122-1240
     paths:
-      - .github/workflows/idle-magazine-check.yml
+      - .github/workflows/empty-idle-only-check.yml
       - bot.py
       - tests/test_empty_idle_only.py
   workflow_dispatch:
