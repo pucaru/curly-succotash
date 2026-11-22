@@ -2,7 +2,7 @@ name: Independent rear impact evasion screen
 on:
   push:
     branches:
-      - experiment/rear-impact-evasion-20261122-0730
+      - experiment/rear-impact-evasion-20261122-0915
     paths:
       - .github/workflows/rear-impact-evasion.yml
       - bench/one_hero_ffa.py
@@ -10,7 +10,7 @@ on:
       - bot.py
   workflow_dispatch:
 concurrency:
-  group: rear-impact-evasion-20261122-0730
+  group: rear-impact-evasion-20261122-0915
   cancel-in-progress: true
 jobs:
   compare:
