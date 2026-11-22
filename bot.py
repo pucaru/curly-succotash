@@ -27,6 +27,7 @@ TUNE = {
     "avoid_range": 145.0,
     "laser_value": 300.0,
     "laser_search_radius": 270.0,
+    "empty_idle_reload": 0,
 }
 try:
     TUNE.update(json.loads(os.environ.get("MECH_TUNE", "{}") or "{}"))
@@ -684,6 +685,12 @@ class Bot:
             if candidates:
                 active = min(candidates, key=lambda c: c[0])[1]
         if active is None:
+            # An empty magazine can remain empty indefinitely while scouting:
+            # the original reload logic below only runs with an active target.
+            # Do not force partial-magazine reloads (a separate rejected trial).
+            if (TUNE["empty_idle_reload"] and w0 and w0.get("kind") == "gun"
+                    and w0.get("ammo", 0) <= 0 and w0.get("reload", 0) <= 0):
+                action["reload"] = True
             if self.last_bearing is not None and obs["t"] - self.last_hit < 8.0:
                 action["aim"] = [self.last_bearing, 0.0]
             elif self.last_sound_yaw is not None and obs["t"] - self.last_sound_time < 4:
